@@ -1,0 +1,25 @@
+{
+    "name": "pd4ml/pd4ml-php",
+    "description": "PD4ML for PHP: HTML to PDF, PDF/A, PDF/UA, DOCX, RTF and image conversion (the PD4ML Java API through a bridge)",
+    "type": "library",
+    "license": "proprietary",
+    "homepage": "https://pd4ml.com",
+    "keywords": ["pdf", "html", "html-to-pdf", "pdfa", "docx", "rtf", "pd4ml"],
+    "authors": [
+        {"name": "PD4ML", "email": "support@pd4ml.com"}
+    ],
+    "require": {
+        "php": ">=8.1",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-simplexml": "*"
+    },
+    "suggest": {
+        "ext-openssl": "needed to download PD4ML over HTTPS (bin/pd4ml install)"
+    },
+    "autoload": {
+        "psr-4": {"Pd4ml\\": "src/"},
+        "exclude-from-classmap": ["src/autoload.php"]
+    },
+    "bin": ["bin/pd4ml"]
+}

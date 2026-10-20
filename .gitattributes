@@ -1,0 +1,4 @@
+* text=auto
+# a script with "#!/usr/bin/env php": LF everywhere, or the shebang breaks on Unix
+bin/pd4ml text eol=lf
+*.jar binary

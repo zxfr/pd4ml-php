@@ -1,0 +1,9 @@
+/vendor/
+/composer.lock
+/build/
+# the machine-specific classpath of a local PD4ML build
+/pd4ml.classpath
+# output of examples and tests
+*.pdf
+*.docx
+*.rtf

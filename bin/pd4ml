@@ -1,0 +1,104 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * pd4ml-php command line.
+ *
+ *   php bin/pd4ml install [--version=V] [--snapshots] [--jakarta] [--home=DIR] [--force] [--no-bouncycastle]
+ *   php bin/pd4ml list                     the PD4ML versions available for download
+ *   php bin/pd4ml version                  the PD4ML version in use
+ *   php bin/pd4ml serve [--port=8723]      run a bridge server (for web servers: PD4ML_BRIDGE=tcp://127.0.0.1:8723)
+ *   php bin/pd4ml convert <in> <out> [--spec=pdf/a-2b] [--engine=v40]   convert to .pdf/.docx/.rtf/.png
+ */
+
+declare(strict_types=1);
+
+foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php', __DIR__ . '/../src/autoload.php'] as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+
+use Pd4ml\Bridge;
+use Pd4ml\Installer;
+use Pd4ml\InstallException;
+use Pd4ml\PD4ML;
+use Pd4ml\Runtime;
+
+$args = array_slice($argv, 1);
+$command = array_shift($args) ?? 'help';
+$options = [];
+$positional = [];
+foreach ($args as $a) {
+    if (preg_match('/^--([a-z-]+)(?:=(.*))?$/', $a, $m)) {
+        $options[$m[1]] = $m[2] ?? true;
+    } else {
+        $positional[] = $a;
+    }
+}
+
+try {
+    switch ($command) {
+        case 'install':
+            $path = Installer::install((string) ($options['version'] ?? 'latest'), [
+                'snapshots' => isset($options['snapshots']),
+                'jakarta' => isset($options['jakarta']),
+                'home' => $options['home'] ?? null,
+                'force' => isset($options['force']),
+                'bouncycastle' => !isset($options['no-bouncycastle']),
+                'repository' => $options['repository'] ?? Installer::REPOSITORY,
+            ]);
+            echo $path, PHP_EOL;
+            exit(0);
+        case 'list':
+            $versions = array_filter(Installer::availableVersions(), fn ($v) => Installer::versionKey($v) !== null);
+            usort($versions, fn ($a, $b) => Installer::versionKey($a) <=> Installer::versionKey($b));
+            echo implode(PHP_EOL, $versions), PHP_EOL;
+            exit(0);
+        case 'version':
+            echo Runtime::version(), PHP_EOL;
+            exit(0);
+        case 'serve':
+            $port = (int) ($options['port'] ?? 8723);
+            $classpath = Bridge::classpath();
+            if (!$classpath) {
+                throw new RuntimeException("PD4ML not found: run 'php bin/pd4ml install' first");
+            }
+            $jvm = getenv('PD4ML_JVM_OPTIONS') ? preg_split('/\s+/', trim(getenv('PD4ML_JVM_OPTIONS'))) : [];
+            $cmd = array_merge([Bridge::javaExecutable(), '-Djava.awt.headless=true'], $jvm,
+                ['-cp', implode(PATH_SEPARATOR, array_merge([Bridge::bridgeJar()], $classpath)),
+                 'com.pd4ml.bridge.Bridge', '--port', (string) $port]);
+            $process = proc_open($cmd, [0 => STDIN, 1 => STDOUT, 2 => STDERR], $pipes, null, null, ['bypass_shell' => true]);
+            exit(is_resource($process) ? proc_close($process) : 1);
+        case 'convert':
+            if (count($positional) !== 2) {
+                throw new InvalidArgumentException('usage: pd4ml convert <input.html|URL> <output.pdf|.docx|.rtf|.png>');
+            }
+            [$in, $out] = $positional;
+            $pd = new PD4ML(null, null, $options['engine'] ?? null);
+            $pd->readHTML($in);
+            $ext = strtolower(pathinfo($out, PATHINFO_EXTENSION));
+            if ($ext === 'docx') {
+                $pd->writeDOCX($out);
+            } elseif ($ext === 'rtf') {
+                $pd->writeRTF($out);
+            } elseif ($ext === 'png') {
+                foreach ($pd->renderPng() as $i => $page) {
+                    file_put_contents(preg_replace('/\.png$/i', '', $out) . '-' . ($i + 1) . '.png', $page);
+                }
+            } else {
+                $pd->writePDF($out, $options['spec'] ?? null);
+            }
+            echo "$out written (PD4ML ", Runtime::version(), $pd->engine ? ", engine {$pd->engine}" : '', ")", PHP_EOL;
+            exit(0);
+        default:
+            $doc = file_get_contents(__FILE__);
+            preg_match('~/\*\*(.*?)\*/~s', $doc, $m);
+            echo preg_replace('/^\s*\* ?/m', '', trim($m[1])), PHP_EOL;
+            exit($command === 'help' ? 0 : 2);
+    }
+} catch (InstallException | RuntimeException | InvalidArgumentException $e) {
+    fwrite(STDERR, 'error: ' . $e->getMessage() . PHP_EOL);
+    exit(1);
+}
