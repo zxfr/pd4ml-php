@@ -8,7 +8,7 @@ constant and enum can be used from PHP, and the module adds PHP I/O (paths, stri
 on top. New converters use the **v42 layout engine** by default.
 
 ```php
-require 'vendor/autoload.php';            // or: require 'path/to/pd4ml-php/src/autoload.php';
+require 'vendor/autoload.php';            // Composer's autoloader
 
 use Pd4ml\PD4ML;
 use Pd4ml\Java;
@@ -31,15 +31,22 @@ PD4ML manual itself is at <https://pd4ml.com/docs/>.
 
 ## Installation
 
+The package is on [Packagist](https://packagist.org/packages/pd4ml/pd4ml-php), so Composer
+installs it:
+
 ```
-composer require pd4ml/pd4ml-php        # or use the checkout with src/autoload.php
-php bin/pd4ml install                   # the most recent PD4ML 4.* release (vendor/bin/pd4ml with Composer)
+composer require pd4ml/pd4ml-php
+vendor/bin/pd4ml install                # the most recent PD4ML 4.* release (Windows: vendor\bin\pd4ml install)
 ```
+
+`composer update pd4ml/pd4ml-php` updates the module; `vendor/bin/pd4ml install` again updates
+the PD4ML build it uses. Without Composer, clone <https://github.com/zxfr/pd4ml-php>, include
+its `src/autoload.php` and run its tool as `php bin/pd4ml`.
 
 `pd4ml install` downloads PD4ML from <https://pd4ml.com/maven2> with the Bouncy Castle jars it
 needs (from Maven Central), verifies them and stores them in the user's cache directory
 (`PD4ML_HOME` to choose another); the module uses that build by itself. Options: `--snapshots`,
-`--version=X`, `--jakarta`, `--home=DIR`, `--force`; `php bin/pd4ml list` shows the versions.
+`--version=X`, `--jakarta`, `--home=DIR`, `--force`; `vendor/bin/pd4ml list` shows the versions.
 
 Alternatively point the module at a build with `PD4ML_CLASSPATH`, `PD4ML_CLASSPATH_FILE` or
 `Bridge::configure(['classpath' => ...])`.
@@ -49,7 +56,7 @@ Alternatively point the module at a build with `PD4ML_CLASSPATH`, `PD4ML_CLASSPA
 Under PHP-FPM or mod_php run one bridge server instead of a Java start per request:
 
 ```
-php bin/pd4ml serve --port=8723
+vendor/bin/pd4ml serve --port=8723
 ```
 
 and set `PD4ML_BRIDGE=tcp://127.0.0.1:8723` for the web server.
@@ -57,8 +64,8 @@ and set `PD4ML_BRIDGE=tcp://127.0.0.1:8723` for the web server.
 ## Command line
 
 ```
-php bin/pd4ml convert page.html page.pdf [--spec=pdf/a-2b] [--engine=v40]   # also .docx, .rtf, .png
-php bin/pd4ml version
+vendor/bin/pd4ml convert page.html page.pdf [--spec=pdf/a-2b] [--engine=v40]   # also .docx, .rtf, .png
+vendor/bin/pd4ml version
 ```
 
 ## Development

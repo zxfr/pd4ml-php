@@ -31,8 +31,9 @@ The generated reference of every class and method is [api.md](api.md).
 | Requirement | Notes |
 |---|---|
 | **PHP 8.1 or later** | CLI, FPM or any SAPI that may start processes (`proc_open`) or open local sockets. Extensions: `json`, `mbstring`, `simplexml`; `openssl` for downloading PD4ML. |
+| **Composer** | To install the module from [Packagist](https://packagist.org/packages/pd4ml/pd4ml-php) (<https://getcomposer.org>); optional, see 2.1. |
 | **Java 8 or later** | A JDK or JRE; an LTS release (17, 21) is recommended. Found through `PD4ML_JAVA`, `JAVA_HOME`, or `java` on the `PATH`. |
-| **PD4ML** | Downloaded by `php bin/pd4ml install` (see below), or any PD4ML build you point the module at. |
+| **PD4ML** | Downloaded by `vendor/bin/pd4ml install` (see below), or any PD4ML build you point the module at. |
 | **Network access** | Only for the download; conversions themselves need none, unless the HTML references remote resources. |
 | **A PD4ML license** | Optional for evaluation: without one, PD4ML runs in evaluation mode and watermarks its output. See [Licensing](https://pd4ml.com/docs/#3.-licensing) and [5.18](#518-licensing). |
 
@@ -44,24 +45,33 @@ set `JAVA_HOME` or `PD4ML_JAVA`.
 
 ### 2.1 Add the module
 
-With Composer, from [Packagist](https://packagist.org/packages/pd4ml/pd4ml-php):
+The module is published on [Packagist](https://packagist.org/packages/pd4ml/pd4ml-php),
+the main Composer repository, as `pd4ml/pd4ml-php`. In your project's directory:
 
 ```
 composer require pd4ml/pd4ml-php
 ```
 
-The source is at <https://github.com/zxfr/pd4ml-php>.
+Composer downloads the module into `vendor/`, adds it to `composer.json` (as `^1.0`, so later
+1.x releases are accepted) and installs its command-line tool as `vendor/bin/pd4ml`
+(`vendor\bin\pd4ml` on Windows). Load the module with Composer's autoloader:
 
-Without Composer, put the project anywhere and include its autoloader:
+<!-- no-test -->
+```php
+require __DIR__ . '/vendor/autoload.php';
+```
 
-```
-require '/path/to/pd4ml-php/src/autoload.php';
-```
+`composer update pd4ml/pd4ml-php` updates it later. The source, issues and release tags are at
+<https://github.com/zxfr/pd4ml-php>.
+
+**Without Composer**, clone or download the source anywhere, include its own autoloader
+(`require '/path/to/pd4ml-php/src/autoload.php';`) and run the tool as `php bin/pd4ml` instead
+of `vendor/bin/pd4ml` in the commands below.
 
 ### 2.2 Install PD4ML
 
 ```
-php bin/pd4ml install          # with Composer: vendor/bin/pd4ml install
+vendor/bin/pd4ml install
 ```
 
 This downloads the most recent PD4ML 4.x release from the PD4ML Maven repository
@@ -80,7 +90,7 @@ again to update.
 | `--home=DIR` | install into `DIR` (default: `PD4ML_HOME`, else the cache directory) |
 | `--force` | download again |
 | `--no-bouncycastle` | skip the Bouncy Castle jars (encryption and signing will not work) |
-| `php bin/pd4ml list` | list the available versions |
+| `vendor/bin/pd4ml list` | list the available versions |
 
 The same from PHP, for a script's initialisation:
 
@@ -92,7 +102,7 @@ Installer::install();                       // downloads only when that build is
 echo Installer::installedVersion(), PHP_EOL;
 ```
 
-Check the installation: `php bin/pd4ml version`.
+Check the installation: `vendor/bin/pd4ml version`.
 
 > **Web servers**: the user the web server runs as must see the installed build — install it
 > as that user, or install into a shared directory with `--home=` and set `PD4ML_HOME` for the
@@ -106,11 +116,11 @@ The module looks for PD4ML in this order:
 2. the `PD4ML_CLASSPATH` environment variable — jars and class directories separated by `;`
    (Windows) or `:` (elsewhere), `dir/*` for all jars of a directory;
 3. the `PD4ML_CLASSPATH_FILE` environment variable — a file with one entry per line;
-4. the build `php bin/pd4ml install` downloaded.
+4. the build `vendor/bin/pd4ml install` downloaded.
 
 Typical reasons to use them:
 
-- **Offline / air-gapped servers**: `php bin/pd4ml install --home=./pd4ml-libs` on a machine
+- **Offline / air-gapped servers**: `vendor/bin/pd4ml install --home=./pd4ml-libs` on a machine
   with network access, copy the directory, set `PD4ML_HOME` on the target.
 - **A licensed or specific jar**: `PD4ML_CLASSPATH=/opt/pd4ml/pd4ml.jar:/opt/pd4ml/lib/*`.
 - **A PD4ML development build** (the v42 layout engine, see [4.3](#43-layout-engines)):
@@ -168,7 +178,7 @@ $thumbnails = $pd->renderPng();          // PNG images, one string per page
   start — run one bridge server for all of them instead:
 
   ```
-  php bin/pd4ml serve --port=8723          # keep it running (systemd, supervisor, a Windows service)
+  vendor/bin/pd4ml serve --port=8723          # keep it running (systemd, supervisor, a Windows service)
   ```
 
   and set `PD4ML_BRIDGE=tcp://127.0.0.1:8723` for the web server (or call
@@ -242,7 +252,7 @@ itself (no Java, no PD4ML build) are `Pd4ml\BridgeException`.
 ## 5. Use cases
 
 The snippets below are complete and runnable; files they read (`report.html`...) are assumed to
-exist in the working directory, and the autoloader to be loaded.
+exist in the working directory, and Composer's autoloader (`vendor/autoload.php`) to be loaded.
 
 ### 5.1 HTML string to PDF
 
@@ -379,7 +389,7 @@ Index a font directory once ahead of time — PD4ML then reads the index
 java -jar <pd4ml jar> -configure.fonts /opt/fonts
 ```
 
-(`php -r "require 'src/autoload.php'; echo Pd4ml\Installer::installedJar();"` prints the jar's
+(`php -r "require 'vendor/autoload.php'; echo Pd4ml\Installer::installedJar();"` prints the jar's
 path.) CSS `@font-face` web fonts in the document work as well.
 
 ### 5.7 Bookmarks, links and tables of contents
@@ -451,7 +461,7 @@ $pd->writePDF('protected.pdf');
 ```
 
 Combine the `Allow*` flags with `|`, or start from `DefaultPermissions` and remove flags with
-`^`. Needs the Bouncy Castle jars (installed by `php bin/pd4ml install`). See
+`^`. Needs the Bouncy Castle jars (installed by `vendor/bin/pd4ml install`). See
 [permissions and encryption](https://pd4ml.com/docs/#11.1-permissions-and-encryption).
 
 ### 5.11 Word (DOCX, RTF) and images
@@ -564,7 +574,7 @@ and reachable through `Java::cls(...)`.
 
 ### 5.16 Web applications
 
-With the bridge server running (`php bin/pd4ml serve`, [4.2](#42-the-bridge)) and
+With the bridge server running (`vendor/bin/pd4ml serve`, [4.2](#42-the-bridge)) and
 `PD4ML_BRIDGE` set for the web server:
 
 <!-- no-test -->
@@ -664,14 +674,14 @@ Without a license PD4ML is fully functional but marks its output. See
   (via `setParam`).
 - **IDE support**: `Pd4ml\PD4MLApi` declares every Java method of `PD4ML` (`@method`), so
   completion works on the converter; [api.md](api.md) lists the API of every class.
-- **Choose the build for production**: pin it with `php bin/pd4ml install --version=X` (or a
+- **Choose the build for production**: pin it with `vendor/bin/pd4ml install --version=X` (or a
   `PD4ML_CLASSPATH` to a jar you keep) rather than following the latest release.
 
 ## 7. Troubleshooting
 
 | Symptom | Cause and remedy |
 |---|---|
-| `BridgeException: PD4ML not found` | No build configured: run `php bin/pd4ml install` (as the user PHP runs as), or set `PD4ML_CLASSPATH`. |
+| `BridgeException: PD4ML not found` | No build configured: run `vendor/bin/pd4ml install` (as the user PHP runs as), or set `PD4ML_CLASSPATH`. |
 | `BridgeException: cannot start java` / "closed the connection" | Java is missing or failed: check `java -version`, set `JAVA_HOME` or `PD4ML_JAVA`; `PD4ML_BRIDGE_LOG` shows Java's output. `proc_open` must not be in `disable_functions`. |
 | `BridgeException: cannot connect` | The bridge server is not running, or `PD4ML_BRIDGE` names another port. |
 | Slow first conversion per request | No bridge server under a web server: see [4.2](#42-the-bridge). |
