@@ -44,14 +44,13 @@ set `JAVA_HOME` or `PD4ML_JAVA`.
 
 ### 2.1 Add the module
 
-With Composer, from the repository (or a path repository for a local checkout):
+With Composer, from [Packagist](https://packagist.org/packages/pd4ml/pd4ml-php):
 
-```json
-{
-    "repositories": [{"type": "vcs", "url": "https://zefer.tv/bitb/scm/pd480ml/pd4ml-php.git"}],
-    "require": {"pd4ml/pd4ml-php": "dev-main"}
-}
 ```
+composer require pd4ml/pd4ml-php
+```
+
+The source is at <https://github.com/zxfr/pd4ml-php>.
 
 Without Composer, put the project anywhere and include its autoloader:
 

@@ -4,6 +4,12 @@
     "type": "library",
     "license": "proprietary",
     "homepage": "https://pd4ml.com",
+    "support": {
+        "email": "support@pd4ml.com",
+        "docs": "https://pd4ml.com/docs/",
+        "source": "https://github.com/zxfr/pd4ml-php",
+        "issues": "https://github.com/zxfr/pd4ml-php/issues"
+    },
     "keywords": ["pdf", "html", "html-to-pdf", "pdfa", "docx", "rtf", "pd4ml"],
     "authors": [
         {"name": "PD4ML", "email": "support@pd4ml.com"}
