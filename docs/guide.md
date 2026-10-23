@@ -481,8 +481,8 @@ $pd->renderAsImages('.', 'page', Java::Constants()->PNG24);   // page files in a
 
 Image formats: `PNG8`, `PNG24`, `TIFF`, `TIFF_COMPRESSED` (`Constants`); the multi-page TIFF
 formats are not supported by the v42 engine yet — use the v40 engine for them. With the v42
-engine, DOCX/RTF output can be made *editable* — text boxes and form fields instead of
-pictures for positioned content: `$pd->setParam(Java::Constants()->PD4ML_WORD_EDITABLE, 'true')`.
+engine, DOCX/RTF output is *editable*: positioned content becomes text boxes and form fields,
+not pictures.
 
 ### 5.12 Interactive forms and multi-column layout
 

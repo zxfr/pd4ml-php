@@ -140,7 +140,6 @@ static ->predictPageHeight(JavaObject $arg0, JavaObject $arg1, int $arg2): int
 | `->PD4ML_EXTRA_RESOURCE_LOADERS` | `string` | static |
 | `->PD4ML_DOCUMENT_VIEW_MODE` | `string` | static |
 | `->PD4ML_DOCUMENT_DATE` | `string` | static |
-| `->PD4ML_WORD_EDITABLE` | `string` | static |
 | `->PD4ML_DOCUMENT_XMP_DATE` | `string` | static |
 | `->PD4ML_FAKE_BROWSER` | `string` | static |
 | `->PD4ML_CACHE_ENABLE` | `string` | static |
