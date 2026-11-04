@@ -736,6 +736,7 @@ Examples: [resource loaders](https://github.com/zxfr/pd4ml-examples/blob/master/
 - [PD4ML documentation](https://pd4ml.com/docs/) and the full [programmer's manual](https://pd4ml.com/docs/pd4ml-manual.html)
 - [Usage examples](https://pd4ml.com/docs/usage-examples.html)
 - [HTML5 element support matrix](https://pd4ml.com/docs/html5-element-support-matrix.html)
+- [PD4ML for PHP compared with mPDF, Dompdf and TCPDF](https://pd4ml.com/docs/integrations/pd4ml-php/php-html-to-pdf-library-comparison.html)
 - [Command-line tool reference](https://pd4ml.com/docs/pd4cmd-command-line-reference.html)
 - [ZUGFeRD and Factur-X invoices](https://pd4ml.com/docs/features/zugferd-and-factur-x-pdf-invoices.html)
 - [PDF post-processing toolkit](https://pd4ml.com/docs/#15.-the-pdf-post-processing-toolkit)
