@@ -661,6 +661,10 @@ Without a license PD4ML is fully functional but marks its output. See
 
 ### 5.19 E-mail messages and saved web pages
 
+> **Editions.** E-mail and saved web page input — `readEML()`/`readMHT()`, and `readHTML()` for input it
+> recognizes as one of them — is part of the PD4ML **DMS and UA editions**. With an STD or PRO license it
+> works, but the output carries the "PD4ML EVALUATION MODE" banners.
+
 PD4ML 4.2 reads e-mail messages (`.eml`) and web pages saved as a single file (`.mht`,
 `.mhtml`) and writes them to any output format:
 
@@ -875,7 +879,7 @@ The complete guide, with more examples:
 |---|---|
 | `readHTML($source, ?string $baseUrl, ?string $encoding)` | source: path, URL string, `Bytes`, stream, Java URL/stream |
 | `readHtmlString(string $html, ?string $baseUrl)` | the document as a string |
-| `readEML($source)`, `readMHT($source)` | an e-mail message / a saved web page (4.2): path, URL string, `Bytes`, stream, Java URL/stream |
+| `readEML($source)`, `readMHT($source)` | an e-mail message / a saved web page (4.2; DMS and UA editions): path, URL string, `Bytes`, stream, Java URL/stream |
 | `addAllowedResourceLocation(string\|array $locations)` | trusted locations (4.2): a string, a comma-separated list or an array; local paths as `file:` URLs |
 | `getDocument(): Dom\Document`, `layout(): Dom\Layout` | the DOM API (4.2, v42 engine; DMS and UA editions) |
 | `writePDF($target = null, $spec = null)` | to a path / stream, or returned; spec: `PdfSpec` or keyword |
