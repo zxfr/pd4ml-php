@@ -31,6 +31,10 @@ static ->getVersionBuildDate(): JavaObject
 ->readHTML(Bytes|JavaObject $arg0): void
 ->readHTML(Bytes|JavaObject $arg0, string|JavaObject $arg1): void
 ->readHTML(Bytes|JavaObject $arg0, string|JavaObject $arg1, string $arg2): void
+->readEML(Bytes|JavaObject $arg0): void
+->readEML(string|JavaObject $arg0): void
+->readMHT(Bytes|JavaObject $arg0): void
+->readMHT(string|JavaObject $arg0): void
 ->readHTML(string|JavaObject $arg0): void
 ->readHTML(string|JavaObject $arg0, string $arg1): void
 ->setLogLevel(int $arg0): void
@@ -90,6 +94,8 @@ static ->getVersionBuildDate(): JavaObject
 ->testTermination(): void
 ->getHeight(int $arg0): int
 ->getDocumentTitle(): string
+->layout(): Dom\Layout
+->getDocument(): Dom\Document
 ->writePDF(Output|JavaObject $arg0): void
 ->writePDF(Output|JavaObject $arg0, string $arg1): void
 ->writePDF(Output|JavaObject $arg0, JavaObject $arg1): void
@@ -105,11 +111,13 @@ static ->translateToPt(float $arg0): float
 static ->predictScale(JavaObject $arg0, JavaObject $arg1, int $arg2): float
 static ->predictPageHeight(JavaObject $arg0, JavaObject $arg1, int $arg2): int
 ->setDynamicData(array|JavaObject $arg0): void
+->addAllowedResourceLocation(string $arg0): void
 ->setParam(string $arg0, string $arg1): void
 ->getLastRenderInfo(string $arg0): mixed
 ->outputRange(string $arg0): void
 ->monitorProgressWith(JavaObject $arg0): void
 ->addMetadata(string $arg0, string $arg1, bool $arg2): void
+->addMetadata(string $arg0, string $arg1, string $arg2, string $arg3): void
 ->applyKerning(bool $arg0): void
 ->enableLigatures(bool $arg0): void
 ->getCache(): mixed
@@ -421,6 +429,7 @@ static ->valueOf(string $arg0): JavaObject
 ->requiresOutputInternet(): bool
 ->allowsExternalHyperlinking(): bool
 ->requiresReliableUnicodeSemantics(): bool
+->hasPdfVersion(): bool
 ->getPdfVersionLabel(): string
 ->getPdfExtLevel(): int
 ->getPdfaVersion(): int
@@ -571,5 +580,153 @@ static ->addUniqueMessage(JavaObject $arg0, JavaObject $arg1): bool
 ->isError(): bool
 ->isWarning(): bool
 ->getMessage(): string
+```
+
+## DOM API (`Pd4ml\Dom`)
+
+`$pd->getDocument()` returns a `Dom\Document`, `$pd->layout()` a `Dom\Layout` (v42 layout engine; PD4ML DMS and UA editions). They are PHP classes over `com.pd4ml.dom`: nodes come back as `Element`, `Text`, `Comment`, `DocumentType` or `Document`, Java lists as PHP arrays. See [the DOM API guide](https://pd4ml.com/docs/features/modifying-the-html-document-before-conversion.html).
+
+### Dom\Node
+
+`com.pd4ml.dom.Node`
+
+```php
+->getNodeName(): string
+->getParentNode(): ?Node
+->getParentElement(): ?Element
+->getOwnerDocument(): ?Document
+->getChildNodes(): Node[]
+->hasChildNodes(): bool
+->getFirstChild(): ?Node
+->getLastChild(): ?Node
+->getNextSibling(): ?Node
+->getPreviousSibling(): ?Node
+->getTextContent(): ?string
+->setTextContent(?string $text): void
+->appendChild(Node $child): Node
+->insertBefore(Node $child, ?Node $ref): Node
+->replaceChild(Node $replacement, Node $old): Node
+->removeChild(Node $child): Node
+->remove(): void
+->cloneNode(bool $deep = false): Node
+->contains(?Node $other): bool
+->toHtml(): string
+->equals(mixed $other): bool
+```
+
+### Dom\Document
+
+`com.pd4ml.dom.Document` — extends `Node`
+
+```php
+->getDocumentElement(): ?Element
+->getHead(): ?Element
+->getBody(): ?Element
+->getDoctype(): ?DocumentType
+->isQuirksMode(): bool
+->getBaseURI(): ?string
+->getTitle(): ?string
+->getElementById(string $id): ?Element
+->getElementsByTagName(string $name): Element[]
+->getElementsByClassName(string $names): Element[]
+->querySelector(string $selectors): ?Element
+->querySelectorAll(string $selectors): Element[]
+->createElement(string $tagName): Element
+->createTextNode(string $data): Text
+->createComment(string $data): Comment
+```
+
+### Dom\Element
+
+`com.pd4ml.dom.Element` — extends `Node`
+
+```php
+->getTagName(): string
+->getAttribute(string $name): ?string
+->hasAttribute(string $name): bool
+->setAttribute(string $name, string $value): void
+->removeAttribute(string $name): void
+->getAttributes(): array<string, string>
+->getId(): ?string
+->setId(string $id): void
+->getClassName(): ?string
+->setClassName(string $className): void
+->getClassList(): string[]
+->hasClass(string $name): bool
+->addClass(string $name): void
+->removeClass(string $name): void
+->toggleClass(string $name): bool
+->getChildren(): Element[]
+->getFirstElementChild(): ?Element
+->getLastElementChild(): ?Element
+->getNextElementSibling(): ?Element
+->getPreviousElementSibling(): ?Element
+->getElementsByTagName(string $name): Element[]
+->getElementsByClassName(string $names): Element[]
+->querySelector(string $selectors): ?Element
+->querySelectorAll(string $selectors): Element[]
+->matches(string $selectors): bool
+->closest(string $selectors): ?Element
+->getInnerHTML(): string
+->setInnerHTML(string $html): void
+->getOuterHTML(): string
+->setOuterHTML(string $html): void
+```
+
+### Dom\Text
+
+`com.pd4ml.dom.Text` — extends `Node`
+
+```php
+->getData(): string
+->setData(string $data): void
+->isWhitespace(): bool
+```
+
+### Dom\Comment
+
+`com.pd4ml.dom.Comment` — extends `Node`
+
+```php
+->getData(): string
+->setData(string $data): void
+```
+
+### Dom\DocumentType
+
+`com.pd4ml.dom.DocumentType` — extends `Node`
+
+```php
+->getName(): ?string
+->getPublicId(): ?string
+->getSystemId(): ?string
+```
+
+### Dom\Layout
+
+`com.pd4ml.dom.Layout`
+
+```php
+->getPageCount(): int
+->getPageWidth(int $page): float
+->getPageHeight(int $page): float
+->getPageNumber(int $page): int
+->getBoxes(?Element $element): LayoutBox[]
+->getPages(?Element $element): int[]
+->getComputedStyle(?Element $element, string $property): ?string
+->elementAt(int $page, float $x, float $y): ?Element
+```
+
+### Dom\LayoutBox
+
+`com.pd4ml.dom.LayoutBox`
+
+```php
+->page: int, ->x: float, ->y: float, ->width: float, ->height: float   // readonly
+->getPage(): int
+->getX(): float
+->getY(): float
+->getWidth(): float
+->getHeight(): float
 ```
 

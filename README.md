@@ -72,7 +72,7 @@ vendor/bin/pd4ml version
 
 | | |
 |---|---|
-| `php tests/run.php` | the tests (`PD4ML_NETWORK_TESTS=1`: also the download) |
+| `php tests/run.php` | the tests (`PD4ML_NETWORK_TESTS=1`: also the download; `PD4ML_TEST_LICENSE`: a license file for the DOM API tests) |
 | `php tests/docs.php` | runs the guide's code snippets |
 | `php tools/build-bridge.php` | rebuilds `lib/pd4ml-bridge.jar` from `java/src` (needs a JDK) |
 | `php tools/gen-stubs.php [classpath-file]` | regenerates `src/PD4MLApi.php` and `docs/api.md` from the PD4ML classes |
@@ -86,4 +86,5 @@ The tests and generators use the PD4ML build from `PD4ML_CLASSPATH`/`PD4ML_CLASS
 line-based JSON protocol: PHP creates Java objects, calls methods (overloads resolved by
 reflection) and reads fields by handle; bytes, streams, URLs and maps are converted at the
 boundary; Java interfaces can be implemented by PHP callables (`Java::proxy()`), their calls
-delivered to PHP while the conversion runs.
+delivered to PHP while the conversion runs. The DOM API (`getDocument()`, `layout()`) comes as
+PHP classes (`Pd4ml\Dom`) over the Java objects, with Java lists as PHP arrays.

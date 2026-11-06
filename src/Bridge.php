@@ -343,7 +343,7 @@ final class Bridge
         if ($v instanceof Output) {
             return ['$out' => $v->index];
         }
-        if ($v instanceof PD4ML) {
+        if ($v instanceof PD4ML || $v instanceof Dom\Node || $v instanceof Dom\Layout) {
             return ['$ref' => $v->java->handle()];
         }
         if (is_string($v) && !mb_check_encoding($v, 'UTF-8')) {

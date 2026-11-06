@@ -85,6 +85,7 @@ namespace Pd4ml;
  * @method mixed getLastRenderInfo(string $arg0)
  * @method void outputRange(string $arg0)
  * @method void addMetadata(string $arg0, string $arg1, bool $arg2)
+ * @method void addMetadata(string $arg0, string $arg1, string $arg2, string $arg3)
  * @method void applyKerning(bool $arg0)
  * @method void enableLigatures(bool $arg0)
  * @method mixed getCache()

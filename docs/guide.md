@@ -535,6 +535,7 @@ $pd->setLogLevel(1);                                // 0 (silent) .. 5
 $pd->setAuthorName('Reporting service');
 $pd->setDocumentTitle('Monthly statement');
 $pd->addMetadata('StatementId', '2026-10', false);
+$pd->addMetadata('http://example.com/ns/statement/1.0/', 'st', 'Account', 'DE-0042');  // an XMP property (4.2)
 $pd->readHtmlString('<h1>Statement</h1>');
 $pd->writePDF('statement.pdf');
 $pages = (int) $pd->getLastRenderInfo(Java::Constants()->PD4ML_TOTAL_PAGES);
@@ -649,6 +650,154 @@ echo 'PD4ML ', Runtime::version(), $pd->isPro() ? ' pro' : '', PHP_EOL;
 Without a license PD4ML is fully functional but marks its output. See
 [licensing](https://pd4ml.com/docs/#3.-licensing).
 
+### 5.19 E-mail messages and saved web pages
+
+PD4ML 4.2 reads e-mail messages (`.eml`) and web pages saved as a single file (`.mht`,
+`.mhtml`) and writes them to any output format:
+
+```php
+use Pd4ml\PD4ML;
+
+$pd = new PD4ML();
+$pd->readEML('message.eml');            // a path or URL, Bytes, or an open stream
+$pd->writePDF('message.pdf');
+echo $pd->getDocumentTitle(), PHP_EOL;  // the subject
+
+$page = new PD4ML();
+$page->readMHT('page.mht');             // a saved web page, with its images and styles
+$page->writePDF('page.pdf');
+```
+
+A message becomes a block with From, Date, To, Cc, Subject and the list of attachments,
+followed by its body (the HTML part, else the plain text) with the images it embeds; the
+attachments are embedded in the PDF (not in PDF/A-1/-2, DOCX or RTF). `readHTML()` recognizes
+such files too, by their ending or their first lines — `readEML()`/`readMHT()` say what the
+input is, the way to go for mail from outside your control.
+
+Of the resources a message or saved page refers to but does not contain, only `https://` ones
+are loaded; `addAllowedResourceLocation()` (5.20) replaces that default. Details:
+[converting e-mail and saved web pages](https://pd4ml.com/docs/features/converting-e-mail-and-saved-web-pages.html).
+
+### 5.20 Untrusted HTML: restricting resource loading
+
+HTML written by users, customers or another system can make the server load anything it
+points to: local files, internal services (SSRF), slow hosts. `addAllowedResourceLocation()`
+limits loading — style sheets, images, web fonts, attachments, a document read from a URL —
+to the locations you trust:
+
+```php
+use Pd4ml\PD4ML;
+
+$userHtml = '<p>Hello <img src="file:/etc/passwd"></p>';
+
+$pd = new PD4ML();
+$pd->addAllowedResourceLocation('https://cdn.example.com/assets/');
+$pd->addAllowedResourceLocation([__DIR__ . '/templates/', 'https://*.example.com/img/']);
+$pd->readHtmlString($userHtml, 'https://cdn.example.com/assets/');
+$pd->writePDF('user-content.pdf');       // without the image
+```
+
+A resource is loaded only if its URL starts with one of the locations (case-insensitive); `*`
+matches any characters except `/`; a local path stands for its `file:` URL; a path with `..` is
+always rejected. Each call adds to the list; with none, resources load from anywhere. A rejected
+resource is left out; with `setErrorPolicy(Java::ErrorPolicy()->PEDANTIC)` a rejected image
+stops the conversion instead. End server locations with `/` (`https://cdn.example.com` would
+also match `https://cdn.example.com.attacker.net/`). `data:` URIs and the `useTTF()` fonts are
+not restricted. See
+[restricting resource loading](https://pd4ml.com/docs/features/restricting-resource-loading-for-untrusted-html.html).
+
+### 5.21 Modifying the document before conversion (DOM API)
+
+With the v42 layout engine (the default), the document `readHTML()` has parsed can be read,
+queried with CSS selectors and changed before the output; every later output is laid out from
+the changed document. `getDocument()` returns a `Pd4ml\Dom\Document`; nodes are `Dom\Element`,
+`Dom\Text`, `Dom\Comment`... objects with the methods of the Java classes, and lists are PHP
+arrays:
+
+```php
+use Pd4ml\PD4ML;
+
+$pd = new PD4ML();
+$pd->readHtmlString('<h1 id="number">0000</h1><img src="data:,"><table><tbody id="items">'
+    . '<tr><td>sample</td></tr></tbody></table><p class="draft-only">Draft</p>');
+$doc = $pd->getDocument();
+
+$doc->getElementById('number')->setTextContent('INV-2026-0042');
+foreach ($doc->querySelectorAll('img:not([alt])') as $img) {   // an array of Dom\Element
+    $img->setAttribute('alt', '');
+}
+$doc->getElementById('items')->setInnerHTML('<tr><td>Consulting</td><td>8 h</td></tr>');
+foreach ($doc->querySelectorAll('.draft-only') as $e) {
+    $e->remove();
+}
+$note = $doc->createElement('p');
+$note->setTextContent('Prices include VAT.');
+$doc->getBody()->appendChild($note);
+
+$style = $doc->createElement('style');
+$style->setTextContent('@page { size: A4 landscape; margin: 15mm }');
+$doc->getHead()->appendChild($style);
+
+$pd->writePDF('invoice.pdf');
+file_put_contents('invoice-as-converted.html', $doc->toHtml());
+```
+
+- **Navigating**: `getParentNode()`, `getChildNodes()`, `getFirstChild()`, `getNextSibling()`...;
+  on elements `getChildren()`, `getFirstElementChild()`, `getNextElementSibling()`...
+- **Querying**: `getElementById()`, `querySelector()`/`querySelectorAll()` (PD4ML's CSS selectors,
+  `:has()`, `:nth-child()`... included), `getElementsByTagName()`, `getElementsByClassName()`,
+  `matches()`, `closest()`.
+- **Elements**: `getAttribute()`/`setAttribute()`/`removeAttribute()`, `getAttributes()` (an
+  associative array), `getClassList()`, `addClass()`/`removeClass()`/`toggleClass()`,
+  `getInnerHTML()`/`setInnerHTML()`, `getOuterHTML()`/`setOuterHTML()`.
+- **Changing the tree**: `createElement()`, `createTextNode()`, `createComment()`, `appendChild()`,
+  `insertBefore()`, `replaceChild()`, `removeChild()`, `remove()`, `cloneNode()`.
+- Two objects for the same node are `equals()`, not necessarily `===`. Errors (an invalid
+  selector, inserting a node into itself) are `JavaException`s
+  (`java.lang.IllegalArgumentException`).
+
+Placeholders of `setDynamicData()` are already filled in when `readHTML()` returns, and the
+title (`$[title]`) is taken from the document then: change it with `setDocumentTitle()`.
+`getDocument()` and `layout()` throw a `JavaException` (`java.lang.IllegalStateException`)
+before `readHTML()` and with the v40 engine.
+
+> **Edition**: the DOM API (`getDocument()`, `layout()`) is part of the PD4ML **DMS and UA
+> editions** ([editions and prices](https://pd4ml.com/products/)). Without a license it works
+> with the evaluation watermark; with an STD or PRO license, the output of a document it was
+> used on carries "PD4ML EVALUATION MODE" banners.
+
+**Checking the layout.** `layout()` lays the document out into pages as `writePDF()` would,
+without writing it, and returns a `Dom\Layout`: page count and sizes, each element's boxes
+(`Dom\LayoutBox`: page, x, y, width, height in PDF points from the *top left* of the page), the
+pages it is on, its computed style. A layout is a snapshot — after changing the document, call
+`layout()` again:
+
+```php
+use Pd4ml\PD4ML;
+
+$pd = new PD4ML();
+$pd->readHtmlString('<h1>Report</h1>' . str_repeat('<p>Line</p>', 60)
+    . '<div id="totals" style="height:200px">Totals</div>');
+$doc = $pd->getDocument();
+$totals = $doc->getElementById('totals');
+
+$layout = $pd->layout();
+echo $layout->getPageCount(), ' pages', PHP_EOL;
+foreach ($layout->getBoxes($totals) as $box) {
+    echo $box, PHP_EOL;                  // page 3: 28.35, 35.64, 538.30 x 148.15 pt
+}
+if (count($layout->getPages($totals)) > 1) {    // split over two pages: start it on a new one
+    $totals->setAttribute('style', 'height:200px; page-break-before: always');
+}
+echo $layout->getComputedStyle($totals, 'font-size'), PHP_EOL;
+$pd->writePDF('report.pdf');
+```
+
+`elementAt($page, $x, $y)` returns the element at a point, `getPageNumber($page)` the number
+printed on a page. The page header/footer, footnotes and endnotes are not part of the layout.
+The complete guide, with more examples:
+[modifying the HTML document before conversion](https://pd4ml.com/docs/features/modifying-the-html-document-before-conversion.html).
+
 ---
 
 ## 6. Tips and hints
@@ -669,9 +818,9 @@ Without a license PD4ML is fully functional but marks its output. See
   differently than in the browser, set `setHtmlWidth` to the width the page was designed for.
 - **Index fonts once** with `-configure.fonts` instead of pointing `useTTF` at a large
   unindexed directory on every conversion.
-- **Restrict what documents can load** when converting untrusted HTML: see
-  `Constants->PD4ML_ALLOWED_RESOURCE_LOCATION` and `PD4ML_DISABLE_EXTERNAL_ATTACHMENTS`
-  (via `setParam`).
+- **Restrict what documents can load** when converting untrusted HTML:
+  `addAllowedResourceLocation()` ([5.20](#520-untrusted-html-restricting-resource-loading)), and
+  `setParam(Java::Constants()->PD4ML_DISABLE_EXTERNAL_ATTACHMENTS, 'true')`.
 - **IDE support**: `Pd4ml\PD4MLApi` declares every Java method of `PD4ML` (`@method`), so
   completion works on the converter; [api.md](api.md) lists the API of every class.
 - **Choose the build for production**: pin it with `vendor/bin/pd4ml install --version=X` (or a
@@ -708,6 +857,8 @@ Without a license PD4ML is fully functional but marks its output. See
 | `JavaObject`, `JavaClass` | a Java object / class: methods, fields, `->new()` |
 | `Bytes`, `Output` | binary input / captured output stream |
 | `JavaException`, `BridgeException`, `InstallException` | errors |
+| `Dom\Document`, `Dom\Element`, `Dom\Text`, `Dom\Comment`, `Dom\DocumentType` (all `Dom\Node`) | the DOM API (5.21): the nodes of `getDocument()`, Java lists as PHP arrays |
+| `Dom\Layout`, `Dom\LayoutBox` | `layout()`: pages, element boxes, computed styles |
 
 ### `PD4ML` methods with PHP additions
 
@@ -715,6 +866,9 @@ Without a license PD4ML is fully functional but marks its output. See
 |---|---|
 | `readHTML($source, ?string $baseUrl, ?string $encoding)` | source: path, URL string, `Bytes`, stream, Java URL/stream |
 | `readHtmlString(string $html, ?string $baseUrl)` | the document as a string |
+| `readEML($source)`, `readMHT($source)` | an e-mail message / a saved web page (4.2): path, URL string, `Bytes`, stream, Java URL/stream |
+| `addAllowedResourceLocation(string\|array $locations)` | trusted locations (4.2): a string, a comma-separated list or an array; local paths as `file:` URLs |
+| `getDocument(): Dom\Document`, `layout(): Dom\Layout` | the DOM API (4.2, v42 engine; DMS and UA editions) |
 | `writePDF($target = null, $spec = null)` | to a path / stream, or returned; spec: `PdfSpec` or keyword |
 | `writeDOCX($target = null)`, `writeRTF($target = null, bool $rtfWmf = false)` | as `writePDF` |
 | `renderAsImages($format)` / `renderPng()` | pages as encoded images (strings) |

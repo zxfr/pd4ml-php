@@ -5,7 +5,8 @@
  *
  * - src/PD4MLApi.php: `@method` declarations of every `com.pd4ml.PD4ML` method, so an IDE
  *   completes and checks the Java methods called on {@see \Pd4ml\PD4ML}
- * - docs/api.md: the public API of every exported class, with PHP types
+ * - docs/api.md: the public API of every exported class, with PHP types, and of the PHP DOM
+ *   classes (`Pd4ml\Dom`, by reflection)
  *
  *   php tools/gen-stubs.php [classpath-file]      # default: pd4ml.classpath; javap from JAVA_HOME or PATH
  */
@@ -51,6 +52,9 @@ function phpType(string $java, array $names): string
     ];
     if (isset($map[$t])) {
         return $map[$t];
+    }
+    if (str_starts_with($t, 'com.pd4ml.dom.')) {
+        return 'Dom\\' . substr($t, strlen('com.pd4ml.dom.'));     // PD4ML::getDocument(), layout()
     }
     if (str_ends_with($t, '[]')) {
         return phpType(substr($t, 0, -2), $names) . '[]';
@@ -117,7 +121,8 @@ foreach ($classes as $php => $java) {
 }
 
 // ---------------------------------------------------------------------- src/PD4MLApi.php
-$wrapped = ['useHtmlRenderer', 'readHTML', 'writePDF', 'writeDOCX', 'writeRTF', 'renderAsImages', 'monitorProgressWith'];
+$wrapped = ['useHtmlRenderer', 'readHTML', 'readEML', 'readMHT', 'writePDF', 'writeDOCX', 'writeRTF', 'renderAsImages',
+    'monitorProgressWith', 'addAllowedResourceLocation', 'getDocument', 'layout'];
 $lines = [];
 foreach ($api['PD4ML'][2] as [$static, $name, $params, $ret]) {
     if (in_array($name, $wrapped, true)) {
@@ -172,6 +177,41 @@ foreach ($api as $php => [$fields, $ctors, $methods]) {
         $md .= "```\n\n";
     }
 }
+
+// the PHP DOM classes (Pd4ml\Dom): their own methods, by reflection
+require "$root/src/autoload.php";
+$md .= "## DOM API (`Pd4ml\\Dom`)\n\n"
+    . "`\$pd->getDocument()` returns a `Dom\\Document`, `\$pd->layout()` a `Dom\\Layout` (v42 layout engine; "
+    . "PD4ML DMS and UA editions). They are PHP classes over `com.pd4ml.dom`: nodes come back as `Element`, "
+    . "`Text`, `Comment`, `DocumentType` or `Document`, Java lists as PHP arrays. "
+    . "See [the DOM API guide](https://pd4ml.com/docs/features/modifying-the-html-document-before-conversion.html).\n\n";
+$domMethods = 0;
+foreach (['Node', 'Document', 'Element', 'Text', 'Comment', 'DocumentType', 'Layout', 'LayoutBox'] as $name) {
+    $rc = new ReflectionClass("Pd4ml\\Dom\\$name");
+    $parent = $rc->getParentClass();
+    $md .= "### Dom\\$name\n\n`com.pd4ml.dom.$name`" . ($parent ? ' — extends `' . $parent->getShortName() . '`' : '') . "\n\n```php\n";
+    if ($name === 'LayoutBox') {
+        $md .= "->page: int, ->x: float, ->y: float, ->width: float, ->height: float   // readonly\n";
+    }
+    foreach ($rc->getMethods(ReflectionMethod::IS_PUBLIC) as $m) {
+        $doc = (string) $m->getDocComment();
+        if ($m->getDeclaringClass()->getName() !== $rc->getName() || str_starts_with($m->getName(), '__')
+                || str_contains($doc, '@internal')) {
+            continue;
+        }
+        $params = array_map(static function (ReflectionParameter $p): string {
+            $s = ($p->hasType() ? $p->getType() . ' ' : '') . '$' . $p->getName();
+            return $p->isDefaultValueAvailable() ? $s . ' = ' . var_export($p->getDefaultValue(), true) : $s;
+        }, $m->getParameters());
+        $ret = (string) $m->getReturnType();
+        if (preg_match('/@return\s+(\S+\[\]|array<[^>]+>)/', $doc, $r)) {
+            $ret = $r[1];                                       // the element type of a returned array
+        }
+        $md .= str_replace('Pd4ml\\Dom\\', '', '->' . $m->getName() . '(' . implode(', ', $params) . "): $ret\n");
+        $domMethods++;
+    }
+    $md .= "```\n\n";
+}
 file_put_contents("$root/docs/api.md", $md);
 $count = array_sum(array_map(fn ($a) => count($a[2]), $api));
-echo "src/PD4MLApi.php, docs/api.md: $count methods in " . count($api) . " classes", PHP_EOL;
+echo "src/PD4MLApi.php, docs/api.md: $count methods in " . count($api) . " classes, $domMethods DOM methods", PHP_EOL;

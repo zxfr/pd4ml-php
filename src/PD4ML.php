@@ -10,8 +10,10 @@ namespace Pd4ml;
  *
  * Every method of the Java class is available under its Java name (`setPageSize`, `addStyle`,
  * `useTTF`...). These also take PHP I/O: `readHTML` (a path, URL, {@see Bytes} or a stream
- * resource), `writePDF`, `writeDOCX`, `writeRTF` (a path, a stream resource, or the document
- * returned as a string), `renderAsImages`, and `monitorProgressWith` (a PHP callable).
+ * resource), `readEML`/`readMHT` (e-mail messages, saved web pages), `writePDF`, `writeDOCX`,
+ * `writeRTF` (a path, a stream resource, or the document returned as a string), `renderAsImages`,
+ * `monitorProgressWith` (a PHP callable), and the DOM API: `getDocument()` and `layout()` return
+ * {@see Dom\Document} and {@see Dom\Layout} objects, Java lists as PHP arrays.
  *
  *     $pd = new PD4ML();
  *     $pd->setPageSize(Java::PageSize()->A4);
@@ -142,6 +144,103 @@ class PD4ML
     public function readHtmlString(string $html, ?string $baseUrl = null): void
     {
         $this->readHTML(new Bytes($html), $baseUrl, 'UTF-8');
+    }
+
+    /**
+     * Reads an e-mail message (`.eml`): a block with its headers and attachments, then the body,
+     * with the images it embeds; attachments are embedded in the PDF. Of resources outside the
+     * message only `https://` ones load, unless {@see addAllowedResourceLocation()} says otherwise.
+     * (`readHTML()` recognizes messages too; this says what the input is, for mail from outside
+     * your control.)
+     *
+     * @param string|Bytes|resource|JavaObject $source a local path or URL, the message's bytes
+     *        ({@see Bytes}), an open stream, or a Java `URL`/`InputStream`
+     */
+    public function readEML(mixed $source): void
+    {
+        $this->java->readEML(self::mimeSource($source));
+    }
+
+    /**
+     * Reads a web page saved as a single file (`.mht`, `.mhtml`), with the images, style sheets
+     * and fonts saved in it. Resource loading as for {@see readEML()}.
+     *
+     * @param string|Bytes|resource|JavaObject $source as for {@see readEML()}
+     */
+    public function readMHT(mixed $source): void
+    {
+        $this->java->readMHT(self::mimeSource($source));
+    }
+
+    /** A Java `URL` for a path or URL string, `Bytes` for a stream; Bytes and Java objects as they are. */
+    private static function mimeSource(mixed $source): mixed
+    {
+        if (is_string($source)) {
+            return Runtime::toUrl($source);
+        }
+        if (is_resource($source)) {
+            return new Bytes((string) stream_get_contents($source));
+        }
+        if ($source instanceof Bytes || $source instanceof JavaObject) {
+            return $source;
+        }
+        throw new \InvalidArgumentException('cannot read from a ' . get_debug_type($source));
+    }
+
+    /**
+     * Limits resource loading (stylesheets, images, fonts, attachments, and a document read from
+     * a URL) to locations whose URL starts with one of these: `https://cdn.example.com/assets/`,
+     * `file:/opt/app/templates/` or a local path; `*` matches any characters but `/`. Each call
+     * adds to the locations before; until one is added, resources load from anywhere.
+     *
+     * Local paths (`/opt/app/templates/`, `C:\app\templates\`) are passed as their `file:` URLs.
+     *
+     * @param string|string[] $locations one location, a comma-separated list, or an array of them
+     */
+    public function addAllowedResourceLocation(string|array $locations): void
+    {
+        $list = [];
+        foreach ((array) $locations as $entry) {
+            foreach (explode(',', (string) $entry) as $location) {
+                $location = trim($location);
+                if (preg_match('~^[A-Za-z]:[\\\\/]|^[\\\\/]~', $location)) {
+                    // a local path: its file: URL (file:/C:/... - PD4ML itself makes file:C:/... of C:/...)
+                    $path = str_replace('\\', '/', $location);
+                    $location = 'file:' . (str_starts_with($path, '//') ? '//' : ($path[0] === '/' ? '' : '/')) . $path;
+                }
+                if ($location !== '') {
+                    $list[] = $location;
+                }
+            }
+        }
+        $this->java->addAllowedResourceLocation(implode(',', $list));
+    }
+
+    // ----------------------------------------------------------------------------------- DOM
+
+    /**
+     * The document read by `readHTML()` (or `readEML()`/`readMHT()`), to query and change before
+     * the output: every later output is laid out from the changed document. The same tree on every
+     * call. Needs the v42 layout engine; part of the PD4ML DMS and UA editions (with an STD or PRO
+     * license the output carries "PD4ML EVALUATION MODE" banners).
+     *
+     * @throws JavaException `java.lang.IllegalStateException` before readHTML() or with the v40 engine
+     */
+    public function getDocument(): Dom\Document
+    {
+        return Dom\Node::wrap($this->java->getDocument());
+    }
+
+    /**
+     * Lays the document out into pages as `writePDF()` would, without writing it: page count,
+     * where each element is, computed styles. A snapshot: after changing the document, call it
+     * again. Needs the v42 engine; edition as for {@see getDocument()}.
+     *
+     * @throws JavaException `java.lang.IllegalStateException` before readHTML() or with the v40 engine
+     */
+    public function layout(): Dom\Layout
+    {
+        return new Dom\Layout($this->java->layout());
     }
 
     // -------------------------------------------------------------------------------- output

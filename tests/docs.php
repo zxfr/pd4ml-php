@@ -20,6 +20,13 @@ $work = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pd4ml-php-docs-' . getmypid(
 mkdir($work, 0777, true);
 file_put_contents("$work/style.css", '.note { color: #036 }');
 file_put_contents("$work/report.html", '<link rel="stylesheet" href="style.css"><h1>Report</h1><p class="note">Body</p>');
+file_put_contents("$work/message.eml", "From: Alice <alice@example.com>\r\nTo: Bob <bob@example.com>\r\n"
+    . "Subject: Hello\r\nDate: Fri, 06 Nov 2026 10:00:00 +0100\r\nMIME-Version: 1.0\r\n"
+    . "Content-Type: text/html; charset=utf-8\r\n\r\n<p>Hello, Bob.</p>\r\n");
+file_put_contents("$work/page.mht", "From: <Saved by Blink>\r\nSnapshot-Content-Location: https://example.com/\r\n"
+    . "Subject: Page\r\nMIME-Version: 1.0\r\nContent-Type: multipart/related; type=\"text/html\"; boundary=\"b\"\r\n\r\n"
+    . "--b\r\nContent-Type: text/html; charset=utf-8\r\nContent-Location: https://example.com/\r\n\r\n"
+    . "<h1>A saved page</h1>\r\n--b--\r\n");
 
 $failed = $passed = $skipped = 0;
 foreach ($blocks as $b) {

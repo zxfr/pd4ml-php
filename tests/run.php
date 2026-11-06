@@ -5,7 +5,8 @@
  *
  * They need a PD4ML build: PD4ML_CLASSPATH / PD4ML_CLASSPATH_FILE, ./pd4ml.classpath, or one
  * installed with `php bin/pd4ml install`. PD4ML_NETWORK_TESTS=1 adds a test that downloads the
- * latest release into a temporary directory.
+ * latest release into a temporary directory. PD4ML_TEST_LICENSE (a license file path) licenses
+ * the DOM API tests; with PDFBox 3 on the classpath they check the PDF text as well.
  */
 
 declare(strict_types=1);
@@ -14,6 +15,7 @@ require __DIR__ . '/../src/autoload.php';
 
 use Pd4ml\Bridge;
 use Pd4ml\Bytes;
+use Pd4ml\Dom;
 use Pd4ml\Installer;
 use Pd4ml\Java;
 use Pd4ml\JavaException;
@@ -220,6 +222,247 @@ test('Java exceptions', function () {
     }
 });
 
+// ------------------------------------------------- e-mail, saved pages, resource restriction (4.2)
+
+/** Skips a test on a PD4ML build without the API it tests (the DOM API etc. are new in 4.2). */
+function requires42(): void
+{
+    if (!Runtime::hasLayoutEngines()) {
+        throw new SkipTest('needs PD4ML 4.2');
+    }
+}
+
+final class SkipTest extends RuntimeException
+{
+}
+
+/** A converter with the license in PD4ML_TEST_LICENSE (a license file path), if set. */
+function licensed(): PD4ML
+{
+    $file = getenv('PD4ML_TEST_LICENSE');
+    return $file ? new PD4ML((string) Runtime::toUrl($file)) : new PD4ML();
+}
+
+/** The text of a PDF, if PDFBox 3 is on the classpath; else null. */
+function pdfText(string $pdf): ?string
+{
+    try {
+        $doc = Java::cls('org.apache.pdfbox.Loader')->loadPDF(new Bytes($pdf));
+    } catch (JavaException) {
+        return null;
+    }
+    try {
+        return (string) Java::cls('org.apache.pdfbox.text.PDFTextStripper')->new()->getText($doc);
+    } finally {
+        $doc->close();
+    }
+}
+
+const EML = "From: Alice <alice@example.com>\r\nTo: Bob <bob@example.com>\r\nSubject: Quarterly figures\r\n"
+    . "Date: Fri, 06 Nov 2026 10:00:00 +0100\r\nMessage-ID: <1@example.com>\r\nMIME-Version: 1.0\r\n"
+    . "Content-Type: multipart/alternative; boundary=\"b1\"\r\n\r\n"
+    . "--b1\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello from the plain part\r\n"
+    . "--b1\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"
+    . "<html><body><p id=\"m\">Hello from the <b>HTML</b> part</p></body></html>\r\n--b1--\r\n";
+
+const MHT = "From: <Saved by Blink>\r\nSnapshot-Content-Location: https://example.com/page.html\r\n"
+    . "Subject: Saved page\r\nMIME-Version: 1.0\r\n"
+    . "Content-Type: multipart/related; type=\"text/html\"; boundary=\"b2\"\r\n\r\n"
+    . "--b2\r\nContent-Type: text/html; charset=utf-8\r\nContent-Location: https://example.com/page.html\r\n\r\n"
+    . "<html><head><title>Saved page</title><link rel=\"stylesheet\" href=\"https://example.com/s.css\"></head>"
+    . "<body><h1 id=\"h\">A saved web page</h1></body></html>\r\n"
+    . "--b2\r\nContent-Type: text/css\r\nContent-Location: https://example.com/s.css\r\n\r\n"
+    . "h1 { color: rgb(0, 128, 0) }\r\n--b2--\r\n";
+
+test('readEML: path, bytes and stream', function () {
+    requires42();
+    $dir = tmpdir();
+    file_put_contents("$dir/message.eml", EML);
+    $sources = ["$dir/message.eml", new Bytes(EML), fopen("$dir/message.eml", 'rb')];
+    foreach ($sources as $source) {
+        $pd = new PD4ML();
+        $pd->readEML($source);
+        check($pd->getDocumentTitle() === 'Quarterly figures', 'the subject is the title');
+        check(str_contains($pd->getDocument()->getBody()->getTextContent(), 'Hello from the HTML part'),
+            'the HTML part is the body');
+        check(str_starts_with($pd->writePDF(), '%PDF-'));
+    }
+    $pd = new PD4ML();
+    $pd->readHTML("$dir/message.eml");          // recognized by readHTML too
+    check($pd->getDocumentTitle() === 'Quarterly figures');
+});
+
+test('readMHT', function () {
+    requires42();
+    $dir = tmpdir();
+    file_put_contents("$dir/page.mht", MHT);
+    foreach (["$dir/page.mht", new Bytes(MHT)] as $source) {
+        $pd = new PD4ML();
+        $pd->readMHT($source);
+        check($pd->getDocumentTitle() === 'Saved page');
+        $doc = $pd->getDocument();
+        check($doc->getElementById('h')->getTextContent() === 'A saved web page');
+        check($pd->layout()->getComputedStyle($doc->getElementById('h'), 'color') === '#008000',
+            'the style sheet saved in the file applies');
+        check(str_starts_with($pd->writePDF(), '%PDF-'));
+    }
+});
+
+test('addAllowedResourceLocation', function () {
+    requires42();
+    $dir = tmpdir();
+    mkdir("$dir/assets");
+    mkdir("$dir/other");
+    file_put_contents("$dir/assets/style.css", '#t { color: rgb(255, 0, 0) }');
+    $html = '<link rel="stylesheet" href="assets/style.css"><p id="t">text</p>';
+    $color = function (string|array|null $allowed) use ($dir, $html): ?string {
+        $pd = new PD4ML();
+        if ($allowed !== null) {
+            $pd->addAllowedResourceLocation($allowed);
+        }
+        $pd->readHtmlString($html, $dir);
+        return $pd->layout()->getComputedStyle($pd->getDocument()->getElementById('t'), 'color');
+    };
+    check($color(null) === '#ff0000', 'loads from anywhere by default');
+    check($color("$dir/assets/") === '#ff0000', 'an allowed local path');
+    check($color('https://cdn.example.com/, ' . str_replace('/', DIRECTORY_SEPARATOR, "$dir/assets/")) === '#ff0000',
+        'a comma-separated list, a path with the platform separator');
+    $url = (string) Runtime::toUrl($dir);                       // file:/C:/... or file:/tmp/...
+    check($color(['https://cdn.example.com/', rtrim($url, '/') . '/*/']) === '#ff0000',
+        'an array of locations, a file: URL with a * pattern');
+    check($color("$dir/other/") !== '#ff0000', 'a location outside is not loaded');
+
+    // (as of 4.2.0 a rejected image throws with PEDANTIC; a rejected style sheet does not)
+    $pd = new PD4ML();
+    $pd->setErrorPolicy(Java::ErrorPolicy()->PEDANTIC);
+    $pd->addAllowedResourceLocation("$dir/other/");
+    try {
+        $pd->readHtmlString('<img src="assets/logo.png">', $dir);
+        $pd->writePDF();
+        check(false, 'a rejected resource with PEDANTIC: no exception');
+    } catch (JavaException $e) {
+        check($e->isInstanceOf('java.io.IOException'), $e->javaClass);
+    }
+});
+
+test('addMetadata with an XMP namespace', function () {
+    requires42();
+    $pd = new PD4ML();
+    $pd->addMetadata('http://example.com/ns/invoice/1.0/', 'inv', 'InvoiceNumber', 'INV-2026-0042');
+    $pd->readHtmlString(HTML);
+    $pdf = $pd->writePDF(null, 'pdf/a-2b');
+    check(str_contains($pdf, 'INV-2026-0042') && str_contains($pdf, 'http://example.com/ns/invoice/1.0/'),
+        'the property is in the XMP metadata');
+});
+
+// ---------------------------------------------------------------------------------- DOM API (4.2)
+
+test('DOM: query and change the document', function () {
+    requires42();
+    $pd = licensed();
+    $pd->generateBookmarksFromHeadings(true);
+    $pd->readHtmlString('<!DOCTYPE html><html><head><title>Invoice</title></head><body>'
+        . '<h1 id="title" class="big main">Invoice draft</h1><!-- note -->'
+        . '<table><tbody id="items"><tr><td>sample</td></tr></tbody></table>'
+        . '<p class="item">one</p><p class="item">two</p><p class="item draft-only">three</p></body></html>');
+    $doc = $pd->getDocument();
+    check($doc instanceof Dom\Document && $doc->getTitle() === 'Invoice');
+    check($doc->getDoctype()?->getName() === 'html' && !$doc->isQuirksMode());
+
+    $items = $doc->querySelectorAll('p.item');
+    check(is_array($items) && array_is_list($items) && count($items) === 3, 'querySelectorAll: a PHP list');
+    check($items[0] instanceof Dom\Element && $items[1]->getTextContent() === 'two');
+    check(count($doc->getElementsByTagName('p')) === 3 && count($doc->getElementsByClassName('item draft-only')) === 1);
+    check($doc->querySelector('p.nothing') === null && $doc->getElementById('nothing') === null);
+
+    $h1 = $doc->getElementById('title');
+    check($h1->getTagName() === 'h1' && $h1->getAttributes() === ['id' => 'title', 'class' => 'big main']);
+    check($h1->getClassList() === ['big', 'main'] && $h1->hasClass('main'));
+    check($h1->getNextSibling() instanceof Dom\Comment && $h1->getNextElementSibling()->getTagName() === 'table');
+    check($h1->getParentElement()->equals($doc->getBody()) && $doc->getBody()->contains($h1));
+    check(!$h1->getParentElement()->equals($h1));
+    check($h1->getFirstChild() instanceof Dom\Text && $h1->getFirstChild()->getData() === 'Invoice draft');
+    check($doc->querySelector('td')->closest('tbody')->getId() === 'items' && $items[2]->matches('.draft-only'));
+
+    // the edits
+    $h1->setTextContent('Invoice 2026-0042');
+    $h1->toggleClass('big');
+    check($h1->getClassName() === 'main');
+    $doc->getElementById('items')->setInnerHTML('<tr><td>Consulting</td></tr><tr><td>Travel</td></tr>');
+    check(count($doc->querySelectorAll('#items tr')) === 2);
+    foreach ($doc->querySelectorAll('.draft-only') as $e) {
+        $e->remove();
+    }
+    $note = $doc->createElement('p');
+    $note->setAttribute('id', 'note');
+    $note->appendChild($doc->createTextNode('Prices include VAT.'));
+    $doc->getBody()->insertBefore($note, $doc->getBody()->getFirstElementChild());
+    check($doc->getBody()->getFirstElementChild()->getId() === 'note');
+    $copy = $note->cloneNode(true);
+    check($copy->getTextContent() === 'Prices include VAT.' && $copy->getParentNode() === null);
+    check(str_contains($doc->toHtml(), '<td>Travel</td>') && !str_contains($doc->toHtml(), 'three'));
+
+    // ... are in the output
+    $pdf = $pd->writePDF();
+    check(str_contains((string) Pdf::open($pdf)->dumpOutlines(), 'Invoice 2026-0042'), 'the bookmark of the edited heading');
+    $text = pdfText($pdf);
+    if ($text !== null) {
+        check(str_contains($text, 'Invoice 2026-0042') && str_contains($text, 'Prices include VAT.')
+            && str_contains($text, 'Travel') && !str_contains($text, 'three') && !str_contains($text, 'Invoice draft'),
+            "the edits in the PDF text:\n$text");
+    }
+});
+
+test('DOM: layout', function () {
+    requires42();
+    $pd = licensed();
+    $pd->setPageSize(Java::PageSize()->A4);
+    $pd->readHtmlString('<h1 id="h" style="font-size:20px">Title</h1><p id="a">first</p>'
+        . '<p id="b" style="display:none">hidden</p><p id="c">last</p>');
+    $doc = $pd->getDocument();
+    $layout = $pd->layout();
+    check($layout instanceof Dom\Layout && $layout->getPageCount() === 1);
+    check(abs($layout->getPageWidth(1) - 595.0) < 1 && abs($layout->getPageHeight(1) - 842.0) < 1);
+    check($layout->getPageNumber(1) === 1);
+
+    $boxes = $layout->getBoxes($doc->getElementById('h'));
+    check(count($boxes) === 1 && $boxes[0] instanceof Dom\LayoutBox, 'getBoxes: a PHP list of boxes');
+    [$box] = $boxes;
+    check($box->page === 1 && $box->getPage() === 1 && $box->getX() > 0 && $box->getY() > 0
+        && $box->getWidth() > 0 && $box->getHeight() > 0, (string) $box);
+    check(str_starts_with((string) $box, 'page 1: '));
+    check($layout->getPages($doc->getElementById('c')) === [1]);
+    check($layout->getBoxes($doc->getElementById('b')) === [] && $layout->getPages($doc->getElementById('b')) === []);
+    check($layout->getComputedStyle($doc->getElementById('h'), 'font-size') !== null);
+    check($layout->getComputedStyle($doc->getElementById('b'), 'display') === null, 'not displayed');
+    $hit = $layout->elementAt(1, $box->x + $box->width / 2, $box->y + $box->height / 2);
+    check($hit !== null && $hit->closest('h1')?->getId() === 'h', 'elementAt');
+
+    // a change, then a new layout
+    $doc->getElementById('c')->setAttribute('style', 'page-break-before: always');
+    check($layout->getPageCount() === 1, 'a layout is a snapshot');
+    $layout = $pd->layout();
+    check($layout->getPageCount() === 2 && $layout->getPages($doc->getElementById('c')) === [2]);
+    check(Pdf::open($pd->writePDF())->getNumberOfPages() === 2);
+});
+
+test('DOM: before readHTML and with the v40 engine', function () {
+    requires42();
+    foreach ([new PD4ML(), new PD4ML(null, null, 'v40')] as $i => $pd) {
+        if ($i === 1) {
+            $pd->readHtmlString(HTML);
+        }
+        foreach (['getDocument', 'layout'] as $method) {
+            try {
+                $pd->$method();
+                check(false, "$method: no exception");
+            } catch (JavaException $e) {
+                check($e->isInstanceOf('java.lang.IllegalStateException'), $e->javaClass);
+            }
+        }
+    }
+});
+
 // ----------------------------------------------------------------------------------- installer
 
 test('version ordering', function () {
@@ -258,6 +501,7 @@ if (getenv('PD4ML_NETWORK_TESTS') === '1') {
 $filter = $argv[1] ?? '';
 $failed = 0;
 $passed = 0;
+$skipped = 0;
 foreach ($tests as $name => $body) {
     if ($filter !== '' && !str_contains($name, $filter)) {
         continue;
@@ -266,11 +510,14 @@ foreach ($tests as $name => $body) {
         $body();
         $passed++;
         echo "  ok    $name\n";
+    } catch (SkipTest $e) {
+        $skipped++;
+        echo "  skip  $name: {$e->getMessage()}\n";
     } catch (Throwable $e) {
         $failed++;
         echo "  FAIL  $name: " . get_class($e) . ': ' . $e->getMessage() . "\n";
     }
 }
 Bridge::shutdown();
-echo "\n$passed passed, $failed failed\n";
+echo "\n$passed passed, $failed failed" . ($skipped ? ", $skipped skipped" : '') . "\n";
 exit($failed ? 1 : 0);
