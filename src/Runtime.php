@@ -7,7 +7,7 @@ namespace Pd4ml;
 /**
  * The PD4ML runtime: version, installation, bridge setup, and value helpers.
  *
- *     Runtime::install();                 // once: the latest PD4ML 4.* release
+ *     Runtime::install();                 // once: PD4ML 4.2 (newest release >= 4.2.0, else the 4.2.x snapshot)
  *     echo Runtime::version();
  */
 final class Runtime

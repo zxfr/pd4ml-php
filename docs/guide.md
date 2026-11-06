@@ -52,7 +52,7 @@ the main Composer repository, as `pd4ml/pd4ml-php`. In your project's directory:
 composer require pd4ml/pd4ml-php
 ```
 
-Composer downloads the module into `vendor/`, adds it to `composer.json` (as `^1.0`, so later
+Composer downloads the module into `vendor/`, adds it to `composer.json` (as `^1.1`, so later
 1.x releases are accepted) and installs its command-line tool as `vendor/bin/pd4ml`
 (`vendor\bin\pd4ml` on Windows). Load the module with Composer's autoloader:
 
@@ -74,19 +74,27 @@ of `vendor/bin/pd4ml` in the commands below.
 vendor/bin/pd4ml install
 ```
 
-This downloads the most recent PD4ML 4.x release from the PD4ML Maven repository
+This downloads PD4ML 4.2 from the PD4ML Maven repository
 (<https://pd4ml.com/maven2>), together with the Bouncy Castle jars PD4ML needs for encryption
 and signing (from Maven Central), checks every file against its published SHA-1 checksum and
 stores them in a per-user cache directory (`%LOCALAPPDATA%\pd4ml-php` on Windows,
 `~/.cache/pd4ml-php` elsewhere). The module then uses that build by itself; run the command
 again to update.
 
+**Which build**: the newest PD4ML release from 4.2.0 on or, while there is none, the newest
+4.2.x development snapshot (`4.2.0-SNAPSHOT` until 4.2.0 is released). Module 1.1 wraps the
+PD4ML 4.2 API — `readEML()`/`readMHT()`, `addAllowedResourceLocation()`, XMP `addMetadata()`,
+the DOM API — which builds before 4.2 do not have, so the default is a snapshot until PD4ML
+4.2.0 is out; from then on the same command installs the release, and later snapshots (4.3...)
+are never picked by accident. Earlier builds still work with the rest of the module: pin one
+with `--version`, e.g. `--version=4.1.2`.
+
 | Option | |
 |---|---|
-| *(none)* | the most recent 4.x release |
+| *(none)* | the newest release from 4.2.0 on, else the newest 4.2.x snapshot |
 | `--snapshots` | the most recent 4.x build, development snapshots included |
-| `--version=4.0.23fx2` | an exact version |
-| `--jakarta` | the `-jakarta` variant (for Jakarta EE / Servlet 6 environments) |
+| `--version=4.1.2` | an exact version (`4.0.23fx2`, `4.2.0-SNAPSHOT`...) |
+| `--jakarta` | for Jakarta EE / Servlet 6 environments: a `-jakarta` variant chosen by the same rule if there is one; PD4ML 4.2 publishes none - its builds contain the Jakarta tag library - so this installs the same 4.2 build (an older `-jakarta` build with `--version`, e.g. `4.0.20fx3-jakarta`) |
 | `--home=DIR` | install into `DIR` (default: `PD4ML_HOME`, else the cache directory) |
 | `--force` | download again |
 | `--no-bouncycastle` | skip the Bouncy Castle jars (encryption and signing will not work) |
@@ -99,6 +107,7 @@ The same from PHP, for a script's initialisation:
 use Pd4ml\Installer;
 
 Installer::install();                       // downloads only when that build is not there yet
+                                            // Installer::install('4.1.2') pins a version
 echo Installer::installedVersion(), PHP_EOL;
 ```
 
@@ -852,7 +861,7 @@ The complete guide, with more examples:
 | `Java` | the PD4ML Java classes: `PageSize()`, `PageMargins()`, `Units()`, `Constants()`, `LayoutEngine()`, `ErrorPolicy()`, `PdfSpec()`, `PdfDocument()`, `Dimensions()`, `ProgressListener()`, `StatusMessage()`, `ResourceProvider()`, `CustomTag()`, `PD4ML()`; `cls($name)`; `proxy($interface, $callable)` |
 | `Pdf` | `htmlToPdf($source, $target, $options)`, `open($source, $password)`, `write($doc, $target, $password, $permissions)`, `merge($a, $b, $target)` |
 | `Runtime` | `version()`, `install()`, `configure()`, `hasLayoutEngines()`, `toUrl()`, `pdfSpec()` |
-| `Installer` | `install($version, $options)`, `installedJar()`, `installedClasspath()`, `installedVersion()`, `availableVersions()` |
+| `Installer` | `install($version, $options)`, `installedJar()`, `installedClasspath()`, `installedVersion()`, `availableVersions()`, `defaultVersion($versions)` (the default's rule; minimum `MINIMUM_VERSION`) |
 | `Bridge` | `configure($config)`, `get()`, `shutdown()`, `classpath()` |
 | `JavaObject`, `JavaClass` | a Java object / class: methods, fields, `->new()` |
 | `Bytes`, `Output` | binary input / captured output stream |

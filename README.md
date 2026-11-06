@@ -36,7 +36,7 @@ installs it:
 
 ```
 composer require pd4ml/pd4ml-php
-vendor/bin/pd4ml install                # the most recent PD4ML 4.* release (Windows: vendor\bin\pd4ml install)
+vendor/bin/pd4ml install                # PD4ML 4.2 (Windows: vendor\bin\pd4ml install)
 ```
 
 `composer update pd4ml/pd4ml-php` updates the module; `vendor/bin/pd4ml install` again updates
@@ -47,6 +47,12 @@ its `src/autoload.php` and run its tool as `php bin/pd4ml`.
 needs (from Maven Central), verifies them and stores them in the user's cache directory
 (`PD4ML_HOME` to choose another); the module uses that build by itself. Options: `--snapshots`,
 `--version=X`, `--jakarta`, `--home=DIR`, `--force`; `vendor/bin/pd4ml list` shows the versions.
+
+By default it installs the newest PD4ML release from 4.2.0 on or, while there is none, the newest
+4.2.x snapshot (`4.2.0-SNAPSHOT` today): this module's PD4ML 4.2 API (`readEML`/`readMHT`,
+`addAllowedResourceLocation`, XMP `addMetadata`, the DOM API) needs PD4ML 4.2, which is not
+released yet. Installs move to 4.2.0 by themselves once it is out. To stay on the current
+release, pin it: `vendor/bin/pd4ml install --version=4.1.2` (the 4.2 API is then unavailable).
 
 Alternatively point the module at a build with `PD4ML_CLASSPATH`, `PD4ML_CLASSPATH_FILE` or
 `Bridge::configure(['classpath' => ...])`.

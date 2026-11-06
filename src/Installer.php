@@ -7,7 +7,7 @@ namespace Pd4ml;
 /**
  * Downloads a PD4ML build from the PD4ML Maven repository and makes it the default one.
  *
- *     php bin/pd4ml install                  # the most recent 4.* release
+ *     php bin/pd4ml install                  # the newest release >= 4.2.0, else the newest 4.2.x snapshot
  *     php bin/pd4ml install --snapshots      # the most recent 4.* build, snapshots included
  *     php bin/pd4ml install --version=4.0.23fx2
  *     php bin/pd4ml list                     # the available versions
@@ -24,6 +24,11 @@ final class Installer
     private const GROUP_PATH = 'com/pd4ml/pd4ml';
     /** The Bouncy Castle version PD4ML is built against (https://pd4ml.com/docs/#2.-obtaining-pd4ml). */
     public const BOUNCYCASTLE_VERSION = '1.84';
+    /**
+     * The oldest PD4ML the default install accepts: this module's API (readEML/readMHT,
+     * addAllowedResourceLocation, XMP addMetadata, the DOM API) needs PD4ML 4.2. Raise it here.
+     */
+    public const MINIMUM_VERSION = '4.2.0';
     private const BOUNCYCASTLE = ['bcprov-jdk18on', 'bcpkix-jdk18on', 'bcutil-jdk18on'];
     private const VERSION = '/^(\d+)\.(\d+)\.(\d+)(?:fx(\d+)(?:a(\d+))?)?(-jakarta)?(-SNAPSHOT)?$/';
     private const MANIFEST = 'installed.json';
@@ -74,6 +79,51 @@ final class Installer
         return $best;
     }
 
+    /**
+     * The version a plain install picks: the newest 4.* release at least {@see MINIMUM_VERSION}; if
+     * there is none yet, the newest snapshot of that minor line (`4.2.x-SNAPSHOT` for 4.2.0); if
+     * there is none of those either, the newest 4.* release, as before. Later lines' snapshots and
+     * a 5.x are never picked. With `$jakarta`, the `-jakarta` variants first; PD4ML 4.2 has none -
+     * its builds contain the Jakarta tag library (`com.pd4ml.taglib.jakarta`) - so then the plain
+     * build of 4.2.
+     */
+    public static function defaultVersion(array $versions, bool $jakarta = false): string
+    {
+        foreach ($jakarta ? [true, false] : [false] as $variant) {
+            $best = self::defaultOf($versions, $variant);
+            if ($best !== null) {
+                return $best;
+            }
+        }
+        return self::selectVersion($versions, self::versionKey(self::MINIMUM_VERSION)[0], false, $jakarta);
+    }
+
+    /** {@see defaultVersion}'s release or snapshot of the minimum's line, of one variant; null if none. */
+    private static function defaultOf(array $versions, bool $jakarta): ?string
+    {
+        $min = self::versionKey(self::MINIMUM_VERSION);
+        $minSnapshot = self::versionKey(self::MINIMUM_VERSION . '-SNAPSHOT');
+        $release = $snapshot = null;
+        $releaseKey = $snapshotKey = null;
+        foreach ($versions as $v) {
+            $key = self::versionKey($v);
+            if ($key === null || $key[0] !== $min[0] || str_contains($v, '-jakarta') !== $jakarta) {
+                continue;
+            }
+            if (!str_ends_with($v, '-SNAPSHOT')) {
+                if ($key >= $min && ($releaseKey === null || $key > $releaseKey)) {
+                    $release = $v;
+                    $releaseKey = $key;
+                }
+            } elseif ($key[0] === $min[0] && $key[1] === $min[1] && $key >= $minSnapshot
+                && ($snapshotKey === null || $key > $snapshotKey)) {
+                $snapshot = $v;
+                $snapshotKey = $key;
+            }
+        }
+        return $release ?? $snapshot;
+    }
+
     /** The versions the repository lists. */
     public static function availableVersions(string $repository = self::REPOSITORY): array
     {
@@ -90,8 +140,9 @@ final class Installer
     /**
      * Downloads a PD4ML build (unless already there) and makes it the default one.
      *
-     * @param string $version `'latest'` (the most recent 4.* release; with `snapshots`, the most
-     *        recent 4.* build) or an exact version such as `'4.0.23fx2'`
+     * @param string $version `'latest'` (the newest release at least {@see MINIMUM_VERSION}, else
+     *        the newest snapshot of that line, see {@see defaultVersion()}; with `snapshots`, the
+     *        most recent 4.* build) or an exact version such as `'4.1.2'` or `'4.0.23fx2'`
      * @param array $options `snapshots` (bool), `jakarta` (bool), `repository`, `home`, `force`
      *        (bool), `quiet` (bool), `bouncycastle` (bool, default true)
      * @return string the PD4ML jar's path
@@ -104,8 +155,11 @@ final class Installer
         $force = (bool) ($options['force'] ?? false);
         $quiet = (bool) ($options['quiet'] ?? false);
         if ($version === 'latest') {
-            $version = self::selectVersion(self::availableVersions($repository), 4,
-                (bool) ($options['snapshots'] ?? false), (bool) ($options['jakarta'] ?? false));
+            $versions = self::availableVersions($repository);
+            $jakarta = (bool) ($options['jakarta'] ?? false);
+            $version = ($options['snapshots'] ?? false)
+                ? self::selectVersion($versions, 4, true, $jakarta)
+                : self::defaultVersion($versions, $jakarta);
         }
         $name = self::jarName($version, $repository);
         $path = $home . DIRECTORY_SEPARATOR . $name;

@@ -5,6 +5,9 @@
  * pd4ml-php command line.
  *
  *   php bin/pd4ml install [--version=V] [--snapshots] [--jakarta] [--home=DIR] [--force] [--no-bouncycastle]
+ *                                          default: the newest PD4ML release >= 4.2.0, else the newest
+ *                                          4.2.x snapshot (this module's 4.2 API needs PD4ML 4.2);
+ *                                          --snapshots: the newest 4.* build; --version=4.1.2: that one
  *   php bin/pd4ml list                     the PD4ML versions available for download
  *   php bin/pd4ml version                  the PD4ML version in use
  *   php bin/pd4ml serve [--port=8723]      run a bridge server (for web servers: PD4ML_BRIDGE=tcp://127.0.0.1:8723)

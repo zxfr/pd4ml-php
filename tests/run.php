@@ -5,7 +5,7 @@
  *
  * They need a PD4ML build: PD4ML_CLASSPATH / PD4ML_CLASSPATH_FILE, ./pd4ml.classpath, or one
  * installed with `php bin/pd4ml install`. PD4ML_NETWORK_TESTS=1 adds a test that downloads the
- * latest release into a temporary directory. PD4ML_TEST_LICENSE (a license file path) licenses
+ * default build (PD4ML 4.2) into a temporary directory. PD4ML_TEST_LICENSE (a license file path) licenses
  * the DOM API tests; with PDFBox 3 on the classpath they check the PDF text as well.
  */
 
@@ -16,6 +16,7 @@ require __DIR__ . '/../src/autoload.php';
 use Pd4ml\Bridge;
 use Pd4ml\Bytes;
 use Pd4ml\Dom;
+use Pd4ml\InstallException;
 use Pd4ml\Installer;
 use Pd4ml\Java;
 use Pd4ml\JavaException;
@@ -478,16 +479,81 @@ test('version ordering', function () {
     check(Installer::versionKey('bogus') === null);
 });
 
+test('default version: release from MINIMUM_VERSION on, else a snapshot of that line', function () {
+    check(Installer::MINIMUM_VERSION === '4.2.0');
+    // the repository today: 4.1.2 is the newest release, 4.2.0-SNAPSHOT the only 4.2 build
+    $today = ['4.0.20fx3-jakarta', '4.0.23fx2', '4.0.23fx2-SNAPSHOT', '4.1.1', '4.1.1-SNAPSHOT', '4.0.24',
+        '4.1.2', '4.2.0-SNAPSHOT', 'bogus'];
+    check(Installer::defaultVersion($today) === '4.2.0-SNAPSHOT');
+    check(Installer::selectVersion($today) === '4.1.2', 'the newest release, as before');
+    check(Installer::selectVersion($today, 4, true) === '4.2.0-SNAPSHOT', 'snapshots: the newest build');
+    // a later 4.2.x snapshot is taken, a later line's is not
+    check(Installer::defaultVersion([...$today, '4.2.1-SNAPSHOT', '4.3.0-SNAPSHOT', '5.0.0-SNAPSHOT']) === '4.2.1-SNAPSHOT');
+    // once released, the release wins over any snapshot; later releases follow
+    check(Installer::defaultVersion([...$today, '4.2.0', '4.2.1-SNAPSHOT', '4.3.0-SNAPSHOT']) === '4.2.0');
+    check(Installer::defaultVersion([...$today, '4.2.0', '4.2.0fx1', '4.3.0', '4.3.1-SNAPSHOT']) === '4.3.0');
+    check(Installer::defaultVersion([...$today, '4.2.0fx1a1']) === '4.2.0fx1a1', 'an fx pre-release counts');
+    check(Installer::defaultVersion(['4.1.2', '5.0.0']) === '4.1.2', 'never a 5.x');
+    // jakarta: the same rule over the -jakarta variants first; 4.2 has none (its builds hold the
+    // Jakarta tag library), so then the plain 4.2 build
+    check(Installer::defaultVersion([...$today, '4.2.0-jakarta-SNAPSHOT'], true) === '4.2.0-jakarta-SNAPSHOT');
+    check(Installer::defaultVersion([...$today, '4.2.0-jakarta', '4.2.0-jakarta-SNAPSHOT', '4.2.1'], true) === '4.2.0-jakarta');
+    check(Installer::defaultVersion($today, true) === '4.2.0-SNAPSHOT', 'jakarta: the plain 4.2 build');
+    // no 4.2 release or 4.2.x snapshot at all: the newest 4.* release of the variant, as before
+    check(Installer::defaultVersion(['4.1.2', '4.1.3-SNAPSHOT', '4.3.0-SNAPSHOT']) === '4.1.2');
+    check(Installer::defaultVersion(['4.0.20fx3-jakarta', '4.1.2'], true) === '4.0.20fx3-jakarta');
+});
+
+test('install from a repository (offline)', function () {
+    // a local Maven repository: its maven-metadata.xml lists the versions as pd4ml.com/maven2 does
+    $repo = tmpdir();
+    $group = "$repo/com/pd4ml/pd4ml";
+    $publish = function (string $path, string $data) use ($group) {
+        @mkdir(dirname("$group/$path"), 0777, true);
+        file_put_contents("$group/$path", $data);
+        file_put_contents("$group/$path.sha1", sha1($data));
+    };
+    $versions = ['4.0.20fx3-jakarta', '4.1.1', '4.1.2', '4.2.0-SNAPSHOT'];
+    mkdir($group, 0777, true);
+    file_put_contents("$group/maven-metadata.xml", '<?xml version="1.0" encoding="UTF-8"?><metadata>'
+        . '<groupId>com.pd4ml</groupId><artifactId>pd4ml</artifactId><versioning><latest>4.2.0-SNAPSHOT</latest>'
+        . '<release>4.1.2</release><versions><version>' . implode('</version><version>', $versions)
+        . '</version></versions></versioning></metadata>');
+    $publish('4.2.0-SNAPSHOT/maven-metadata.xml', '<metadata><versioning><snapshot><timestamp>20261106.120000</timestamp>'
+        . '<buildNumber>7</buildNumber></snapshot><snapshotVersions><snapshotVersion><extension>jar</extension>'
+        . '<value>4.2.0-20261106.120000-7</value></snapshotVersion></snapshotVersions></versioning></metadata>');
+    $publish('4.2.0-SNAPSHOT/pd4ml-4.2.0-20261106.120000-7.jar', 'snapshot jar');
+    $publish('4.1.2/pd4ml-4.1.2.jar', 'release jar');
+    $publish('4.0.20fx3-jakarta/pd4ml-4.0.20fx3-jakarta.jar', 'jakarta jar');
+    check(Installer::availableVersions($repo) === $versions);
+    $options = ['repository' => $repo, 'home' => tmpdir(), 'quiet' => true, 'bouncycastle' => false];
+    $jar = Installer::install('latest', $options);
+    check(basename($jar) === 'pd4ml-4.2.0-20261106.120000-7.jar' && file_get_contents($jar) === 'snapshot jar', $jar);
+    check(Installer::installedVersion($options['home']) === '4.2.0-SNAPSHOT');
+    check(basename(Installer::install('4.1.2', $options)) === 'pd4ml-4.1.2.jar', 'pinned');
+    check(Installer::installedVersion($options['home']) === '4.1.2');
+    check(basename(Installer::install('latest', ['snapshots' => true] + $options)) === 'pd4ml-4.2.0-20261106.120000-7.jar');
+    check(basename(Installer::install('4.0.20fx3-jakarta', $options)) === 'pd4ml-4.0.20fx3-jakarta.jar');
+    check(Installer::installedVersion($options['home']) === '4.0.20fx3-jakarta');
+    // jakarta: no 4.2 -jakarta build; the 4.2 build holds the Jakarta tag library
+    check(basename(Installer::install('latest', ['jakarta' => true] + $options)) === 'pd4ml-4.2.0-20261106.120000-7.jar');
+    check(Installer::installedVersion($options['home']) === '4.2.0-SNAPSHOT');
+});
+
 if (getenv('PD4ML_NETWORK_TESTS') === '1') {
     test('install and convert (network)', function () {
         $home = tmpdir();
         $script = 'require ' . var_export(dirname(__DIR__) . '/src/autoload.php', true) . ';'
             . '$jar = Pd4ml\Installer::install("latest", ["quiet" => true]);'
+            . '$v = Pd4ml\Installer::installedVersion();'
+            . 'if (Pd4ml\Installer::versionKey($v) < Pd4ml\Installer::versionKey("4.2.0-SNAPSHOT")) exit(4);'
             . 'if (count(Pd4ml\Installer::installedClasspath()) !== 4) exit(3);'
             . '$pd = @new Pd4ml\PD4ML(); $pd->setPermissions("s", Pd4ml\Java::Constants()->AllowPrint);'
             . '$pd->readHtmlString("<p>x</p>"); echo str_contains($pd->writePDF(), "/Encrypt") ? "ok" : "no";';
         $env = ['PD4ML_HOME' => $home, 'JAVA_HOME' => (string) getenv('JAVA_HOME'),
-            'PATH' => (string) getenv('PATH'), 'SystemRoot' => (string) getenv('SystemRoot')];
+            'PATH' => (string) getenv('PATH'), 'SystemRoot' => (string) getenv('SystemRoot'),
+            // a temporary directory for Java: without one PD4ML 4.2 reports its built-in fonts missing
+            'TEMP' => sys_get_temp_dir(), 'TMP' => sys_get_temp_dir(), 'TMPDIR' => sys_get_temp_dir()];
         $p = proc_open([PHP_BINARY, '-r', $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $env);
         $out = stream_get_contents($pipes[1]);
         $err = stream_get_contents($pipes[2]);
