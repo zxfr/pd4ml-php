@@ -88,6 +88,12 @@ test('Java classes and values', function () {
     check(Java::Units()->MM->enumName() === 'MM');
 });
 
+test('methods of JDK-internal classes (a public class of an unexported package)', function () {
+    // Charset.forName gives sun.nio.cs.UTF_8; its newEncoder() is called through java.nio.charset.Charset
+    $encoder = Java::cls('java.nio.charset.Charset')->forName('UTF-8')->newEncoder();
+    check($encoder->charset()->name() === 'UTF-8');
+});
+
 // ------------------------------------------------------------------------------------- output
 
 test('PDF as a string, to a file and to a stream', function () {
@@ -180,7 +186,7 @@ test('progress callback', function () {
     });
     $pd->readHtmlString(HTML);
     $pd->writePDF();
-    check($seen !== [], 'progress reported');   // v42: DOC_WRITE_BEGIN only (as of 4.2.0)
+    check($seen !== [], 'progress reported');   // v42 reports while reading too (newer 4.2.0 builds), not only at DOC_WRITE_BEGIN
 });
 
 test('callback exceptions reach PHP', function () {
@@ -188,8 +194,9 @@ test('callback exceptions reach PHP', function () {
     $pd->monitorProgressWith(function () {
         throw new LogicException('from the callback');
     });
-    $pd->readHtmlString(HTML);
     try {
+        // the first progress event fails the call that caused it: reading or writing, by PD4ML version
+        $pd->readHtmlString(HTML);
         $pd->writePDF();
         check(false, 'callback exception lost');
     } catch (LogicException $e) {

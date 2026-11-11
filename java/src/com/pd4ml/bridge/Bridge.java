@@ -333,8 +333,9 @@ public final class Bridge {
                 throw new NoSuchMethodException("no public " + (target == null ? "static " : "") + "method "
                         + cls.getName() + "." + name + " for " + args.size() + " argument(s) of these types");
             }
-            if (!Modifier.isPublic(best.getDeclaringClass().getModifiers())) {
-                // a public method of a non-public class (an anonymous/inner implementation)
+            if (!Modifier.isPublic(best.getDeclaringClass().getModifiers()) || !exported(best.getDeclaringClass())) {
+                // a public method of a non-public class (an anonymous/inner implementation), or of a class in a
+                // package its module does not export (a JDK-internal implementation): through a public supertype
                 best = publicDeclaration(best);
             }
             try {
@@ -344,16 +345,34 @@ public final class Bridge {
             }
         }
 
+        /**
+         * Whether the class's package is open to the bridge: on Java 9+ a public class of a JDK-internal
+         * package (sun.nio.cs.UTF_8, sun.security.x509.X509CertImpl) is not, so its methods are called
+         * through a public supertype. By reflection: the bridge is Java 8 bytecode.
+         */
+        private static boolean exported(Class<?> c) {
+            try {
+                Object module = Class.class.getMethod("getModule").invoke(c);
+                Package p = c.getPackage();
+                return p == null || (Boolean) module.getClass().getMethod("isExported", String.class).invoke(module, p.getName());
+            } catch (Exception e) {
+                return true;   // Java 8: no modules
+            }
+        }
+
         private static Method publicDeclaration(Method m) {
             for (Class<?> c = m.getDeclaringClass(); c != null; c = c.getSuperclass()) {
                 for (Class<?> i : c.getInterfaces()) {
+                    if (!exported(i)) {
+                        continue;
+                    }
                     try {
                         return i.getMethod(m.getName(), m.getParameterTypes());
                     } catch (NoSuchMethodException ignored) {
                         // not this one
                     }
                 }
-                if (Modifier.isPublic(c.getModifiers())) {
+                if (Modifier.isPublic(c.getModifiers()) && exported(c)) {
                     try {
                         return c.getMethod(m.getName(), m.getParameterTypes());
                     } catch (NoSuchMethodException ignored) {
