@@ -1,7 +1,7 @@
 # PD4ML for PHP — User Guide
 
 `pd4ml-php` brings [PD4ML](https://pd4ml.com) to PHP: it converts HTML and CSS into **PDF**,
-**PDF/A**, **PDF/UA**, **ZUGFeRD/Factur-X** invoices, **DOCX**, **RTF** and **page images**, and
+**PDF/A**, **PDF/UA**, **ZUGFeRD/Factur-X** invoices, **DOCX**, **RTF**, **Markdown** and **page images**, and
 gives PHP applications the complete public PD4ML API.
 
 PD4ML is a Java library. `pd4ml-php` runs it in a small Java *bridge* process that PHP talks to
@@ -163,7 +163,7 @@ assert(str_starts_with($pdf, '%PDF'));
 ### 4.1 The two-phase model
 
 Every conversion is **read once, written any number of times**: `readHTML` parses and lays out
-the document; each `writePDF`, `writeDOCX`, `writeRTF` or `renderAsImages` then produces one
+the document; each `writePDF`, `writeDOCX`, `writeRTF`, `writeMarkdown` or `renderAsImages` then produces one
 output from that same layout. Settings (page size, headers, fonts...) go before `readHTML`.
 See [the two-phase model](https://pd4ml.com/docs/#6.1-the-two-phase-model).
 
@@ -278,7 +278,7 @@ $pd->readHtmlString($html);
 $pdf = $pd->writePDF();                 // the PDF as a string
 ```
 
-`writePDF`, `writeDOCX` and `writeRTF` return the document without a target, write to a file
+`writePDF`, `writeDOCX`, `writeRTF` and `writeMarkdown` return the document without a target, write to a file
 path, or write into an open stream (`fopen(...)`, `php://output`, `php://memory`).
 
 ### 5.2 Files and URLs
@@ -492,6 +492,25 @@ Image formats: `PNG8`, `PNG24`, `TIFF`, `TIFF_COMPRESSED` (`Constants`); the mul
 formats are not supported by the v42 engine yet — use the v40 engine for them. With the v42
 engine, DOCX/RTF output is *editable*: positioned content becomes text boxes and form fields,
 not pictures.
+
+**Markdown** for LLM, RAG and search pipelines (PD4ML 4.2.0 or newer, v42 engine): only the
+text a reader sees, in reading order, with headings, lists, tables, links, footnotes and image
+references. With `$pageMarkers` each page starts with `<!-- page N -->`, the page of the PDF the
+same conversion writes, so a chunk of text can be cited by page:
+
+```php
+use Pd4ml\PD4ML;
+
+$pd = new PD4ML();
+$pd->readHtmlString('<h1>Report</h1><p>Revenue grew by <b>12%</b>.</p>');
+$pd->writePDF('report.pdf');
+$md = $pd->writeMarkdown(null, true);     // a string: "<!-- page 1 -->\n\n# Report\n\n..."
+$pd->writeMarkdown('report.md');          // or to a stream resource
+```
+
+Markdown output is a feature of the DMS and UA editions: with another license, or none, the
+Markdown carries evaluation notes. See
+[HTML to Markdown for LLM and RAG Pipelines](https://pd4ml.com/docs/features/html-to-markdown-for-llm-and-rag-pipelines.html).
 
 ### 5.12 Interactive forms and multi-column layout
 
@@ -822,7 +841,7 @@ The complete guide, with more examples:
   always unresolved relative links ([details](https://pd4ml.com/docs/#6.2-reading-the-source)).
 - **Settings before `readHTML`.** Page size, headers, fonts and styles apply to the layout
   `readHTML` makes; writes afterwards only choose the output format.
-- **Write several formats from one read.** PDF, DOCX and page images from a single `readHTML`
+- **Write several formats from one read.** PDF, DOCX, Markdown and page images from a single `readHTML`
   cost one layout.
 - **Single quotes for placeholders.** `'$[page]'` — in double quotes PHP tries to interpolate.
 - **Print CSS works.** `@page { size: A4 landscape; margin: 15mm }`, `@media print`
@@ -884,6 +903,7 @@ The complete guide, with more examples:
 | `getDocument(): Dom\Document`, `layout(): Dom\Layout` | the DOM API (4.2, v42 engine; DMS and UA editions) |
 | `writePDF($target = null, $spec = null)` | to a path / stream, or returned; spec: `PdfSpec` or keyword |
 | `writeDOCX($target = null)`, `writeRTF($target = null, bool $rtfWmf = false)` | as `writePDF` |
+| `writeMarkdown($target = null, bool $pageMarkers = false)` | Markdown, as `writePDF` |
 | `renderAsImages($format)` / `renderPng()` | pages as encoded images (strings) |
 | `monitorProgressWith($listener)` | a PHP callable or a Java `ProgressListener` |
 | `useHtmlRenderer($engine, ?int $htmlWidth, ?array $params)` | the layout engine by name |

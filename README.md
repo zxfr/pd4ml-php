@@ -1,6 +1,6 @@
 # pd4ml-php
 
-PD4ML for PHP: HTML and CSS to PDF, PDF/A, PDF/UA, DOCX, RTF and images, with the full public
+PD4ML for PHP: HTML and CSS to PDF, PDF/A, PDF/UA, DOCX, RTF, Markdown and images, with the full public
 PD4ML API (Java package `com.pd4ml`) available to PHP applications.
 
 PD4ML runs in a small Java bridge process that PHP talks to; every public Java class, method,

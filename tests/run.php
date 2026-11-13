@@ -160,6 +160,19 @@ test('DOCX, RTF and PNG', function () {
     check(count($pages) >= 1 && str_starts_with($pages[0], "\x89PNG"));
 });
 
+test('Markdown', function () {
+    $pd = new PD4ML();
+    $pd->readHtmlString('<h1>Markdown</h1><p>Hello, <b>world</b>.</p>');
+    // (without a DMS/UA license, evaluation notes go between the blocks)
+    $md = $pd->writeMarkdown(null, true);
+    check(str_contains($md, '<!-- page 1 -->'));
+    check(str_contains($md, '# Markdown'));
+    check(str_contains($md, 'Hello, **world**.'));
+    $plain = $pd->writeMarkdown();
+    check(str_contains($plain, '# Markdown') && !str_contains($plain, '<!-- page'));
+    check(Java::Constants()->MARKDOWN === 'markdown');
+});
+
 test('header, footer, dynamic data and render info', function () {
     $pd = new PD4ML();
     $pd->setDynamicData(['customer' => 'Acme']);

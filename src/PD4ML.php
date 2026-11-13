@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pd4ml;
 
 /**
- * An HTML to PDF/DOCX/RTF/image converter: `com.pd4ml.PD4ML`, with the v42 layout engine by
+ * An HTML to PDF/DOCX/RTF/Markdown/image converter: `com.pd4ml.PD4ML`, with the v42 layout engine by
  * default.
  *
  * Every method of the Java class is available under its Java name (`setPageSize`, `addStyle`,
@@ -276,6 +276,32 @@ class PD4ML
     {
         $out = [];
         Bridge::get()->call($this->java, 'writeRTF', [new Output(), $rtfWmf], $out);
+        return Runtime::deliver($out[0] ?? '', $target);
+    }
+
+    /**
+     * Writes the document as Markdown (GitHub-flavored, UTF-8) for LLM, RAG and search pipelines:
+     * the text a reader sees, in reading order, with headings, lists, tables, links, footnotes and
+     * image references (v42 engine, PD4ML 4.2.0 or newer). A feature of the DMS and UA editions:
+     * with another license, or none, the Markdown carries evaluation notes.
+     *
+     * @param mixed $target as for {@see writePDF()}; none: the Markdown is returned
+     * @param bool $pageMarkers each page starts with `<!-- page N -->`, N being the page of the
+     *        PDF the same conversion writes
+     * @return string|null the Markdown when no target is given
+     */
+    public function writeMarkdown(mixed $target = null, bool $pageMarkers = false): ?string
+    {
+        $out = [];
+        try {
+            Bridge::get()->call($this->java, 'writeMarkdown', [new Output(), $pageMarkers], $out);
+        } catch (JavaException $e) {
+            if (!str_contains($e->getMessage(), 'NoSuchMethodException')) {
+                throw $e;
+            }
+            throw new \RuntimeException('writeMarkdown needs PD4ML 4.2.0 or newer (this is '
+                . $this->java->getVersion() . "): run 'vendor/bin/pd4ml install' to update", 0, $e);
+        }
         return Runtime::deliver($out[0] ?? '', $target);
     }
 

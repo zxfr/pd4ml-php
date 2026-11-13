@@ -121,7 +121,7 @@ foreach ($classes as $php => $java) {
 }
 
 // ---------------------------------------------------------------------- src/PD4MLApi.php
-$wrapped = ['useHtmlRenderer', 'readHTML', 'readEML', 'readMHT', 'writePDF', 'writeDOCX', 'writeRTF', 'renderAsImages',
+$wrapped = ['useHtmlRenderer', 'readHTML', 'readEML', 'readMHT', 'writePDF', 'writeDOCX', 'writeRTF', 'writeMarkdown', 'renderAsImages',
     'monitorProgressWith', 'addAllowedResourceLocation', 'getDocument', 'layout'];
 $lines = [];
 foreach ($api['PD4ML'][2] as [$static, $name, $params, $ret]) {

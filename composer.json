@@ -1,6 +1,6 @@
 {
     "name": "pd4ml/pd4ml-php",
-    "description": "PD4ML for PHP: HTML to PDF, PDF/A, PDF/UA, DOCX, RTF and image conversion (the PD4ML Java API through a bridge)",
+    "description": "PD4ML for PHP: HTML to PDF, PDF/A, PDF/UA, DOCX, RTF, Markdown and image conversion (the PD4ML Java API through a bridge)",
     "type": "library",
     "license": "proprietary",
     "homepage": "https://pd4ml.com",

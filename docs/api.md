@@ -101,6 +101,8 @@ static ->getVersionBuildDate(): JavaObject
 ->writePDF(Output|JavaObject $arg0, JavaObject $arg1): void
 ->writeRTF(Output|JavaObject $arg0, bool $arg1): void
 ->writeDOCX(Output|JavaObject $arg0): void
+->writeMarkdown(Output|JavaObject $arg0): void
+->writeMarkdown(Output|JavaObject $arg0, bool $arg1): void
 ->setRenderingHints(array|JavaObject $arg0): void
 ->renderAsImages(string|JavaObject $arg0, string $arg1, string $arg2): string|JavaObject
 ->renderAsImages(string $arg0): string[]
@@ -189,6 +191,8 @@ static ->predictPageHeight(JavaObject $arg0, JavaObject $arg1, int $arg2): int
 | `->PDFA` | `string` | static |
 | `->PDFUA` | `string` | static |
 | `->DOCX` | `string` | static |
+| `->MARKDOWN` | `string` | static |
+| `->PD4ML_DOCX_EMBED_FONTS` | `string` | static |
 | `->RTF` | `string` | static |
 | `->RTF_WMF` | `string` | static |
 | `->PNG8` | `string` | static |
